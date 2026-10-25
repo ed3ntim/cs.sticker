@@ -106,19 +106,26 @@ class CSSTICKER_PT_place(_Base, bpy.types.Panel):
         settings = context.scene.cs_sticker_place
         layout.use_property_split = True
         layout.use_property_decorate = False
+        target = P.pick_target(context)
+        layout.prop(settings, "size_mode", expand=True)
         col = layout.column(align=True)
-        col.prop(settings, "size")
+        if settings.size_mode == "RELATIVE":
+            col.prop(settings, "size_relative")
+            if target is not None:
+                width = P.sticker_width(settings, target)
+                col.label(text=f"= {width:.4g} units on {target.name}", icon="DRIVER_DISTANCE")
+        else:
+            col.prop(settings, "size")
         col.prop(settings, "rotation")
         col = layout.column(align=True)
         col.prop(settings, "subdiv_levels")
-        col.prop(settings, "offset")
+        col.prop(settings, "offset_factor")
         col.prop(settings, "project_limit")
         layout.prop(settings, "attach")
         layout.prop(settings, "align_up")
         layout.prop(settings, "unique_material")
 
         layout.use_property_split = False
-        target = P.pick_target(context)
         has_sticker = registry.selected_sticker(context) is not None
         col = layout.column(align=True)
         col.scale_y = 1.4

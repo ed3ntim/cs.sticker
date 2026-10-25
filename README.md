@@ -22,7 +22,11 @@ stickers, export them from your own game installation (see
 
 1. **Library**: search by name, collection, finish or tag; filter by
    collection and finish. **Preview** shows the texture and its maps.
-2. **Placement** (size, rotation, subdivisions, offset, attach mode):
+2. **Placement** (size, rotation, subdivisions, offset, attach mode).
+   Size is relative by default: 4.5 % of the target's longest side, which
+   matches CS2 stickers on rifles in any scene scale (meters or Source
+   units). Switch to *Absolute* for a fixed width. The offset is a
+   percentage of the sticker width.
    - **Place Interactively**: the sticker follows the mouse over surfaces as
      a live preview. Wheel = rotate (Shift = fine), Ctrl+Wheel = scale,
      F = toggle upright, LMB = place, Shift+LMB = place and continue,

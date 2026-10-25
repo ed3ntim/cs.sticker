@@ -80,7 +80,7 @@ class CSSTICKER_OT_place_interactive(bpy.types.Operator):
         # Keep the preview out of selection and raycasts until placed.
         obj.hide_select = True
         self.ghost = obj
-        self.base_size = settings.size
+        self.base_size = P.sticker_width(settings)  # size the ghost was built with
 
     def _finish(self, context):
         context.area.header_text_set(None)
@@ -137,15 +137,18 @@ class CSSTICKER_OT_place_interactive(bpy.types.Operator):
         if self.ghost is None or self.hit is None:
             return
         target, location, normal = self.hit
+        settings = context.scene.cs_sticker_place
+        # Relative size follows the surface under the mouse.
+        width = P.sticker_width(settings, target) * self.scale
         matrix = P.orientation_matrix(location, normal, self.rotation, self.upright)
-        self.ghost.matrix_world = matrix @ Matrix.Scale(self.scale, 4)
+        self.ghost.matrix_world = matrix @ Matrix.Scale(width / self.base_size, 4)
         sw = self.ghost.modifiers.get(P.MOD_SHRINKWRAP)
         if sw is not None:
             if sw.target != target:
                 sw.target = target
-            settings = context.scene.cs_sticker_place
+            sw.offset = P.surface_offset(settings, width)
             if settings.project_limit > 0:
-                sw.project_limit = settings.project_limit * self.base_size * self.scale
+                sw.project_limit = settings.project_limit * width
 
     def _place(self, context):
         obj = self.ghost

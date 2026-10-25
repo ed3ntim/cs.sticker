@@ -303,8 +303,29 @@ class TestPlacement(unittest.TestCase):
             xs = [(ev.matrix_world @ v.co).x for v in ev.data.vertices]
             self.assertGreater(len(xs), 4)
             for x in xs:
-                self.assertAlmostEqual(x, 1.0 + bpy.context.scene.cs_sticker_place.offset, 3)
+                width = P.sticker_width(bpy.context.scene.cs_sticker_place, cube)
+                self.assertAlmostEqual(x, 1.0 + P.surface_offset(bpy.context.scene.cs_sticker_place, width), 3)
         self.assertEqual(len(bpy.data.collections[utils.STICKER_COLLECTION_NAME].objects), 7)
+
+    def test_relative_size(self):
+        settings = bpy.context.scene.cs_sticker_place
+        cube = add_cube()
+        cube.scale = (18.85, 1.0, 1.0)  # ~37.7 units long, like a CS2 rifle in Source units
+        bpy.context.view_layer.update()
+        self.assertEqual(settings.size_mode, "RELATIVE")
+        self.assertAlmostEqual(P.sticker_width(settings, cube), 37.7 * 0.045, 3)
+        self.assertAlmostEqual(P.sticker_width(settings, None), settings.size)
+        settings.size_mode = "ABSOLUTE"
+        self.assertAlmostEqual(P.sticker_width(settings, cube), settings.size)
+        settings.size_mode = "RELATIVE"
+        select_sticker("demo_paper_star")
+        cube.select_set(True)
+        bpy.context.view_layer.objects.active = cube
+        bpy.context.scene.cursor.location = (0, 0, 5)
+        self.assertEqual(bpy.ops.cs_sticker.spawn(mode="SURFACE"), {"FINISHED"})
+        obj = bpy.context.active_object
+        self.assertAlmostEqual(obj.dimensions.x, 37.7 * 0.045, 2)
+        self.assertAlmostEqual(obj.modifiers[1].offset, 37.7 * 0.045 * 0.002, 5)
 
     def test_spawn_requires_target(self):
         select_sticker("demo_paper_star")

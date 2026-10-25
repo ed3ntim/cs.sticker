@@ -14,7 +14,7 @@ legacy add-on (bl_info). Sub-packages:
 bl_info = {
     "name": "cs.sticker",
     "author": "ed3n",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (4, 5, 0),
     "location": "3D Viewport > Sidebar > CS Sticker",
     "description": "Spawn CS2 stickers onto mesh surfaces with finish-accurate "

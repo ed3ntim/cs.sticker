@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "cs_sticker"
-version = "1.1.0"
+version = "1.2.0"
 name = "cs.sticker"
 tagline = "Place CS2 stickers on meshes with finish-accurate materials"
 maintainer = "ed3n <contact@ed3n.gallery>"

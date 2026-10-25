@@ -26,6 +26,20 @@ def sticker_aspect(sticker):
     return max(w, 1) / max(h, 1)
 
 
+def sticker_width(settings, target=None):
+    """Sticker width in scene units: relative to the target's longest side
+    (world space), or the absolute size without target / in absolute mode."""
+    if settings.size_mode == "RELATIVE" and target is not None:
+        longest = max(target.dimensions)
+        if longest > 0:
+            return longest * settings.size_relative / 100.0
+    return settings.size
+
+
+def surface_offset(settings, width):
+    return width * settings.offset_factor / 100.0
+
+
 def create_plane_mesh(name, width, height):
     """Unit quad (centered, +Z normal) with a 'UVMap' layer covering 0..1."""
     hw, hh = width / 2.0, height / 2.0
@@ -55,7 +69,7 @@ def add_modifier_stack(obj, target, settings, size):
     sw.use_negative_direction = True
     sw.use_positive_direction = True
     sw.cull_face = "OFF"
-    sw.offset = settings.offset
+    sw.offset = surface_offset(settings, size)
     sw.project_limit = settings.project_limit * size if settings.project_limit > 0 else 0.0
     sw.target = target
     return sub, sw
@@ -106,8 +120,8 @@ def create_sticker_object(context, sticker, settings, target=None, matrix=None):
 
     Returns (object, warnings). ``matrix`` defaults to the 3D cursor."""
     aspect = sticker_aspect(sticker)
-    width = settings.size
-    height = settings.size / aspect
+    width = sticker_width(settings, target)
+    height = width / aspect
     mesh = create_plane_mesh(f"CS2 {sticker.name}", width, height)
     obj = bpy.data.objects.new(f"CS2 {sticker.name}", mesh)
     utils.sticker_collection(context).objects.link(obj)
