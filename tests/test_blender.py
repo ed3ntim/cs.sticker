@@ -54,7 +54,7 @@ class TestRegistration(unittest.TestCase):
         self.assertTrue(hasattr(bpy.types.WindowManager, "cs_sticker"))
         self.assertTrue(hasattr(bpy.types.Scene, "cs_sticker_place"))
         for op in ("spawn", "place_interactive", "refresh_library", "add_folder",
-                   "rotate", "make_unique", "retarget"):
+                   "rotate", "make_unique", "retarget", "reset_placement"):
             self.assertTrue(hasattr(bpy.ops.cs_sticker, op), op)
         self.assertIsNotNone(utils.get_prefs(), "add-on preferences not available")
 
@@ -184,6 +184,28 @@ class TestMaterials(unittest.TestCase):
         self.assertAlmostEqual(grp.inputs["Wear Bias"].default_value, 2.04, places=5)
         self.assertAlmostEqual(grp.inputs["Wear Scratches"].default_value, 0.5, places=5)
 
+    def test_steep_face_cutoff(self):
+        s = registry.get_catalog().get("demo_paper_star")
+        mat, _ = material.build_material(s)
+        ramp = next(n for n in mat.node_tree.nodes if n.label == material.STEEP_FACES_LABEL)
+        self.assertTrue(ramp.outputs["Result"].is_linked)
+        self.assertTrue(material.sticker_group_node(mat).inputs["Alpha"].is_linked)
+
+    def test_gold_legacy_tint_params(self):
+        from cs_sticker.library.catalog import Sticker
+        base = {"base": os.path.join(utils.CORE_LIBRARY_DIR, "textures", "demo_paper_star_color.png")}
+        params = {"Gold Tint": [1.0, 0.68, 0.0, 1.0], "Foil Tint": [1.0, 0.68, 0.0, 1.0],
+                  "Tint Amount": 1.0, "Tint Saturation": 0.1}
+        mat, _ = material.build_material(
+            Sticker(id="cs2_9_sig_gold", name="sig", collection="X", finish="GOLD", textures=base, params=params))
+        grp = material.sticker_group_node(mat)
+        self.assertAlmostEqual(grp.inputs["Tint Saturation"].default_value, 0.1, 4)
+        self.assertAlmostEqual(grp.inputs["Tint Amount"].default_value, 1.0, 4)
+        self.assertAlmostEqual(grp.inputs["Gold Tint"].default_value[1], 0.68, 4)
+        foil, _ = material.build_material(
+            Sticker(id="cs2_9_foil", name="f", collection="X", finish="FOIL", textures=base, params=params))
+        self.assertAlmostEqual(material.sticker_group_node(foil).inputs["Foil Tint"].default_value[2], 0.0, 4)
+
     def test_wear_seed_per_sticker(self):
         from cs_sticker.library.catalog import Sticker
         base = {"base": os.path.join(utils.CORE_LIBRARY_DIR, "textures", "demo_paper_star_color.png")}
@@ -246,6 +268,31 @@ class TestMaterials(unittest.TestCase):
             self.assertLess(alpha(3, 8), 0.1)
             self.assertGreater(alpha(12, 8), 0.9)
 
+    def test_thumbnail(self):
+        from cs_sticker.library import thumbs
+        holo = registry.get_catalog().get("demo_holo_rings")
+        px = thumbs.compose(holo, 64)
+        self.assertEqual(px.shape, (64, 64, 4))
+        self.assertLess(px[..., 3].min(), 0.01)      # cut out
+        self.assertGreater(px[..., 3].max(), 0.99)
+        with tempfile.TemporaryDirectory() as root:
+            path = thumbs.build(holo, os.path.join(root, "t.png"), 64)
+            self.assertTrue(os.path.isfile(path))
+        self.assertEqual(thumbs.cache_path(holo), thumbs.cache_path(holo))
+        self.assertNotEqual(thumbs.cache_path(holo),
+                            thumbs.cache_path(registry.get_catalog().get("demo_paper_star")))
+        # No temporary images left behind in the user's file.
+        self.assertFalse([i for i in bpy.data.images if i.name.startswith("cs_sticker_thumb")])
+        # Drawing queues a missing thumbnail; the timer builds the cache file.
+        cached = thumbs.cache_path(holo)
+        if os.path.isfile(cached):
+            os.remove(cached)
+        registry.preview_icon(holo)
+        self.assertIn(holo, registry._thumb_queue)
+        while registry._thumb_queue:
+            registry._build_thumbs()
+        self.assertTrue(os.path.isfile(cached))
+
     def test_missing_textures_fallback(self):
         from cs_sticker.library.catalog import Sticker
         s = Sticker(id="ghost", name="Ghost", collection="X", finish="HOLO",
@@ -290,7 +337,7 @@ class TestPlacement(unittest.TestCase):
             obj = bpy.context.active_object
             self.assertTrue(utils.is_sticker(obj))
             self.assertEqual(obj[utils.PROP_STICKER_FINISH], s.finish)
-            self.assertEqual([m.type for m in obj.modifiers], ["SUBSURF", "SHRINKWRAP"])
+            self.assertEqual([m.type for m in obj.modifiers], ["SUBSURF", "SHRINKWRAP", "NODES"])
             self.assertEqual(obj.modifiers[1].target, cube)
             self.assertEqual(obj.parent, cube)
             loc = obj.matrix_world.translation
@@ -313,7 +360,7 @@ class TestPlacement(unittest.TestCase):
         cube.scale = (18.85, 1.0, 1.0)  # ~37.7 units long, like a CS2 rifle in Source units
         bpy.context.view_layer.update()
         self.assertEqual(settings.size_mode, "RELATIVE")
-        self.assertAlmostEqual(P.sticker_width(settings, cube), 37.7 * 0.045, 3)
+        self.assertAlmostEqual(P.sticker_width(settings, cube), 37.7 * 0.065, 3)
         self.assertAlmostEqual(P.sticker_width(settings, None), settings.size)
         settings.size_mode = "ABSOLUTE"
         self.assertAlmostEqual(P.sticker_width(settings, cube), settings.size)
@@ -324,8 +371,56 @@ class TestPlacement(unittest.TestCase):
         bpy.context.scene.cursor.location = (0, 0, 5)
         self.assertEqual(bpy.ops.cs_sticker.spawn(mode="SURFACE"), {"FINISHED"})
         obj = bpy.context.active_object
-        self.assertAlmostEqual(obj.dimensions.x, 37.7 * 0.045, 2)
-        self.assertAlmostEqual(obj.modifiers[1].offset, 37.7 * 0.045 * 0.002, 5)
+        xs = [v.co.x for v in obj.data.vertices]
+        self.assertAlmostEqual(max(xs) - min(xs), 37.7 * 0.065, 3)
+        self.assertAlmostEqual(obj.modifiers[1].offset, 37.7 * 0.065 * 0.01, 5)
+
+    def test_projection_outermost_and_clipped(self):
+        """Decal projection: lands on the outer surface of a raised plate and
+        marks the part that hangs past the target's edge."""
+        reset_scene()
+        mesh = bpy.data.meshes.new("stepped")
+        mesh.from_pydata([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0),
+                          (-0.1, -0.2, 0.05), (0.3, -0.2, 0.05), (0.3, 0.2, 0.05), (-0.1, 0.2, 0.05)],
+                         [], [(0, 1, 2, 3), (4, 5, 6, 7)])
+        base = bpy.data.objects.new("stepped", mesh)
+        bpy.context.scene.collection.objects.link(base)
+        bpy.context.view_layer.update()
+        settings = bpy.context.scene.cs_sticker_place
+        settings.size_mode = "ABSOLUTE"
+        settings.size = 0.6
+        sticker = registry.get_catalog().get("demo_paper_star")
+        # Centered on the base, partly over the plate: plate wins.
+        m = P.orientation_matrix(Vector((0, 0, 0)), Vector((0, 0, 1)))
+        ob, _ = P.create_sticker_object(bpy.context, sticker, settings, base, m)
+        ev = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        zs = [(ev.matrix_world @ v.co).z for v in ev.data.vertices if abs(v.co.x - 0.1) < 0.15 and abs(v.co.y) < 0.15]
+        self.assertTrue(zs and min(zs) > 0.04, zs[:5])
+        # Hanging past the edge: off-surface points are marked.
+        m = P.orientation_matrix(Vector((0.95, 0, 0)), Vector((0, 0, 1)))
+        edge, _ = P.create_sticker_object(bpy.context, sticker, settings, base, m)
+        ev = edge.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        attr = ev.data.attributes.get(material.UNPROJECTED_ATTRIBUTE)
+        self.assertIsNotNone(attr)
+        flags = [d.value for d in attr.data]
+        self.assertTrue(0 < sum(flags) < len(flags))
+        settings.property_unset("size_mode")
+        settings.property_unset("size")
+
+    def test_reset_placement(self):
+        settings = bpy.context.scene.cs_sticker_place
+        settings.size_mode = "ABSOLUTE"
+        settings.size_relative = 12.0
+        settings.subdiv_levels = 2
+        settings.offset_factor = 0.5
+        settings.unique_material = not settings.unique_material
+        bpy.ops.cs_sticker.reset_placement()
+        for prop in ("size_mode", "size_relative", "subdiv_levels", "offset_factor", "unique_material"):
+            self.assertFalse(settings.is_property_set(prop), prop)
+        self.assertEqual(settings.size_mode, "RELATIVE")
+        self.assertAlmostEqual(settings.size_relative, 6.5, 4)
+        self.assertEqual(settings.subdiv_levels, 7)
+        self.assertAlmostEqual(settings.offset_factor, 1.0, 4)
 
     def test_spawn_requires_target(self):
         select_sticker("demo_paper_star")

@@ -38,3 +38,6 @@ desktop.ini
 
 # Personal full builds: Valve assets, never commit
 cs_sticker/stickers/bundled/
+
+# promo video renders (social media only, never committed)
+promo/out/

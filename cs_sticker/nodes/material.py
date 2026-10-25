@@ -13,6 +13,15 @@ from ..library import finishes as F
 from . import groups
 from .builder import find_socket
 
+STEEP_FACES_LABEL = "Steep Faces"
+# Facing (dot of face normal and projection axis) below which the sticker
+# fades out. Only near-vertical walls: with fine subdivision a sticker
+# bridging a step looks right, hiding it leaves visible gaps.
+STEEP_FROM, STEEP_TO = 0.08, 0.2
+# Point attribute written by the "CS Clip" modifier: 1 where the projection
+# missed the target (the sticker would float), 0 on the surface.
+UNPROJECTED_ATTRIBUTE = "cs_unprojected"
+
 MISSING_IMAGE_NAME = "CS2 Missing Texture"
 MAT_PREFIX = "CS2 "
 
@@ -161,7 +170,7 @@ def build_material(sticker, unique=True):
         shape.label = "Sticker Shape"
         shape.location = (-150, 450)
         links.new(wearmask.outputs["Color"], shape.inputs[0])
-        wire(shape.outputs[0], "Alpha")
+        wire(_steep_face_cutoff(nodes, links, shape.outputs[0]), "Alpha")
         # Gray value = wear order: each CS2 sticker wears its own way.
         wire(wearmask.outputs["Color"], "Wear Mask")
         _set_input(grp, "Use Wear Mask", 1.0)
@@ -169,7 +178,7 @@ def build_material(sticker, unique=True):
         if scratches:
             wire(scratches.outputs["Color"], "Scratches")
     else:
-        wire(base.outputs["Alpha"], "Alpha")
+        wire(_steep_face_cutoff(nodes, links, base.outputs["Alpha"]), "Alpha")
 
     normal = tex_node(F.ROLE_NORMAL, 0, uv)
     if normal:
@@ -223,6 +232,46 @@ def _wire_holo(sticker, nodes, links, tex_node, wire):
         proc.location = (-450, -650)
         links.new(coords.outputs["Vector"], proc.inputs["Vector"])
         wire(proc.outputs["Color"], "Spectrum Color")
+
+
+def _steep_face_cutoff(nodes, links, alpha):
+    """Hide the sticker on faces that stand steep to its projection
+    direction. Shrinkwrap pulls the plane over steps and pins of the target,
+    which leaves stretched, streaky walls; projected decals in CS2 fade
+    there as well. Returns the masked alpha socket."""
+    def node(kind, x, y, **props):
+        n = nodes.new(kind)
+        n.location = (x, y)
+        for k, v in props.items():
+            setattr(n, k, v)
+        return n
+
+    geo = node("ShaderNodeNewGeometry", -1100, 900)
+    facing = node("ShaderNodeVectorTransform", -1100, 700, vector_type="VECTOR",
+                  convert_from="OBJECT", convert_to="WORLD")
+    facing.inputs["Vector"].default_value = (0.0, 0.0, 1.0)
+    unit = node("ShaderNodeVectorMath", -900, 700, operation="NORMALIZE")
+    links.new(facing.outputs["Vector"], unit.inputs[0])
+    dot = node("ShaderNodeVectorMath", -700, 800, operation="DOT_PRODUCT")
+    links.new(geo.outputs["True Normal"], dot.inputs[0])
+    links.new(unit.outputs["Vector"], dot.inputs[1])
+    ramp = node("ShaderNodeMapRange", -500, 800, clamp=True, label=STEEP_FACES_LABEL)
+    links.new(dot.outputs["Value"], ramp.inputs["Value"])
+    ramp.inputs["From Min"].default_value = STEEP_FROM
+    ramp.inputs["From Max"].default_value = STEEP_TO
+    mul = node("ShaderNodeMath", -300, 600, operation="MULTIPLY")
+    links.new(alpha, mul.inputs[0])
+    links.new(ramp.outputs["Result"], mul.inputs[1])
+    # Hide what the projection missed (attribute is 0 / absent otherwise).
+    missed = node("ShaderNodeAttribute", -700, 1000, attribute_type="GEOMETRY",
+                  attribute_name=UNPROJECTED_ATTRIBUTE, label="Off Surface")
+    keep = node("ShaderNodeMath", -500, 1000, operation="SUBTRACT", use_clamp=True)
+    keep.inputs[0].default_value = 1.0
+    links.new(missed.outputs["Fac"], keep.inputs[1])
+    final = node("ShaderNodeMath", -150, 700, operation="MULTIPLY")
+    links.new(mul.outputs[0], final.inputs[0])
+    links.new(keep.outputs[0], final.inputs[1])
+    return final.outputs[0]
 
 
 def sticker_seed(sticker_id):

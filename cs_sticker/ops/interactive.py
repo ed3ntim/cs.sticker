@@ -142,13 +142,13 @@ class CSSTICKER_OT_place_interactive(bpy.types.Operator):
         width = P.sticker_width(settings, target) * self.scale
         matrix = P.orientation_matrix(location, normal, self.rotation, self.upright)
         self.ghost.matrix_world = matrix @ Matrix.Scale(width / self.base_size, 4)
+        P.set_target(self.ghost, target)
         sw = self.ghost.modifiers.get(P.MOD_SHRINKWRAP)
         if sw is not None:
-            if sw.target != target:
-                sw.target = target
-            sw.offset = P.surface_offset(settings, width)
-            if settings.project_limit > 0:
-                sw.project_limit = settings.project_limit * width
+            # Offset and limit act in object space; the ghost mesh was built
+            # with base_size and is scaled by the matrix above.
+            sw.offset = P.surface_offset(settings, self.base_size)
+            sw.project_limit = P.project_distance(settings, self.base_size)
 
     def _place(self, context):
         obj = self.ghost

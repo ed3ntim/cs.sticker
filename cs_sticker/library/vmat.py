@@ -185,7 +185,30 @@ def group_params(info):
     scratches = _floats(info.params.get("g_fWearScratchesSticker0", ""))
     if scratches:
         out["Wear Scratches"] = min(1.0, max(0.0, scratches[0]))
+    out.update(_legacy_tint(info))
     return out
+
+
+def _legacy_tint(info):
+    """CS2 gold signatures reuse the plain sticker texture: the shader
+    desaturates it (g_flTintSaturateSticker0) and multiplies a boosted tint
+    (g_vColorTintSticker0 * g_flColorBoostSticker0) into it. The boost only
+    brings the dark tint to full brightness, so the tint is normalized to
+    its brightest channel. Keys for both the gold and the foil group."""
+    if info.params.get("g_bLegacyTintMultiplySticker0", "0").strip() != "1":
+        return {}
+    tint = _floats(info.params.get("g_vColorTintSticker0", ""))[:3]
+    if len(tint) < 3 or max(tint) <= 0 or min(tint) >= 0.999:
+        return {}
+    peak = max(tint)
+    color = [round(min(1.0, max(0.0, v / peak)), 4) for v in tint] + [1.0]
+    sat = _floats(info.params.get("g_flTintSaturateSticker0", ""))
+    return {
+        "Gold Tint": color,
+        "Foil Tint": color,
+        "Tint Amount": 1.0,
+        "Tint Saturation": min(1.0, max(0.0, sat[0])) if sat else 1.0,
+    }
 
 
 # CS2 csgo_weapon_sticker.vfx feature switches -> finish.

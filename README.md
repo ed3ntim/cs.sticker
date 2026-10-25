@@ -23,10 +23,11 @@ stickers, export them from your own game installation (see
 1. **Library**: search by name, collection, finish or tag; filter by
    collection and finish. **Preview** shows the texture and its maps.
 2. **Placement** (size, rotation, subdivisions, offset, attach mode).
-   Size is relative by default: 4.5 % of the target's longest side, which
+   Size is relative by default: 6.5 % of the target's longest side, which
    matches CS2 stickers on rifles in any scene scale (meters or Source
    units). Switch to *Absolute* for a fixed width. The offset is a
-   percentage of the sticker width.
+   percentage of the sticker width. *Reset to Defaults* restores all
+   placement settings.
    - **Place Interactively**: the sticker follows the mouse over surfaces as
      a live preview. Wheel = rotate (Shift = fine), Ctrl+Wheel = scale,
      F = toggle upright, LMB = place, Shift+LMB = place and continue,
@@ -37,8 +38,12 @@ stickers, export them from your own game installation (see
 3. **Active Sticker**: rotate, scale, retarget, Shrinkwrap/Subdivision
    values and all material parameters (Wear, Holo Strength, ...).
 
-Each sticker is a plane with **Subdivision (Simple) → Shrinkwrap (Project,
-±Z)**, attached to the surface via Parent or Child Of.
+Each sticker is a plane with **Subdivision (Simple) → Shrinkwrap (Project)
+→ Clip**, attached to the surface via Parent or Child Of. Projection works
+like a decal: the plane hovers slightly above the surface and is projected
+inward, so it lands on the outermost surface (over plates and levers, not
+under them). Parts that would hang past the edge of the target are hidden,
+as are the steep walls of steps the sticker is pulled over.
 
 ## CS2 stickers
 

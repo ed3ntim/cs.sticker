@@ -93,8 +93,8 @@ class CSSTICKER_PG_placement(bpy.types.PropertyGroup):
     size_mode: EnumProperty(name="Size Mode", items=SIZE_MODE_ITEMS, default="RELATIVE")
     size_relative: FloatProperty(
         name="Size", description="Sticker width as a percentage of the target's longest side. "
-                                 "4.5 % matches CS2 stickers on rifles",
-        default=4.5, min=0.01, soft_max=30.0, max=100.0, subtype="PERCENTAGE",
+                                 "6.5 % matches CS2 stickers on rifles",
+        default=6.5, min=0.01, soft_max=30.0, max=100.0, subtype="PERCENTAGE",
     )
     size: FloatProperty(
         name="Size", description="Sticker width in scene units (also used without a target)",
@@ -106,13 +106,13 @@ class CSSTICKER_PG_placement(bpy.types.PropertyGroup):
     )
     subdiv_levels: IntProperty(
         name="Subdivisions", description="Simple subdivision levels so the plane can bend to the surface",
-        default=5, min=0, max=7,
+        default=7, min=0, max=8,
     )
     offset_factor: FloatProperty(
         name="Offset", description="Distance above the surface as a percentage of the sticker width "
                                    "(prevents z-fighting). Increase it if parts of the sticker sink "
                                    "into curved, low-poly surfaces",
-        default=0.2, min=0.0, soft_max=2.0, precision=2, subtype="PERCENTAGE",
+        default=1.0, min=0.0, soft_max=2.0, precision=2, subtype="PERCENTAGE",
     )
     project_limit: FloatProperty(
         name="Project Limit", description="Maximum projection distance as a factor of the sticker size "

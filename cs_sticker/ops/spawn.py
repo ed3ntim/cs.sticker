@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 ed3n
-"""Spawn operators: snap to the selected surface, or manual mode."""
+"""Spawn operators: snap to the selected surface, or manual mode, and the
+reset of the placement settings."""
 
 import bpy
 from bpy.props import EnumProperty, StringProperty
@@ -99,4 +100,18 @@ class CSSTICKER_OT_spawn(bpy.types.Operator):
         return {"FINISHED"}
 
 
-classes = (CSSTICKER_OT_spawn,)
+class CSSTICKER_OT_reset_placement(bpy.types.Operator):
+    """Restore the default placement settings (size, subdivisions, offset, ...)"""
+    bl_idname = "cs_sticker.reset_placement"
+    bl_label = "Reset to Defaults"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        settings = context.scene.cs_sticker_place
+        for prop in settings.bl_rna.properties:
+            if prop.identifier != "rna_type" and not prop.is_readonly:
+                settings.property_unset(prop.identifier)
+        return {"FINISHED"}
+
+
+classes = (CSSTICKER_OT_spawn, CSSTICKER_OT_reset_placement)

@@ -74,7 +74,7 @@ class CSSTICKER_OT_retarget(bpy.types.Operator):
             P.add_modifier_stack(obj, target, context.scene.cs_sticker_place,
                                  max(obj.dimensions.x, obj.dimensions.y))
         else:
-            sw.target = target
+            P.set_target(obj, target)
         P.attach(obj, target, context.scene.cs_sticker_place.attach)
         return {"FINISHED"}
 

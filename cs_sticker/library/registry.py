@@ -3,15 +3,21 @@
 """Blender glue for the catalog: the shared Catalog instance, preview icons
 and syncing the WindowManager list mirror."""
 
+import os
+import time
+
 import bpy
 import bpy.utils.previews
 from bpy.app.handlers import persistent
 
 from .. import properties, utils
 from . import catalog as C
+from . import thumbs
 
 _catalog = C.Catalog()
 _previews = None  # bpy.utils.previews collection, keyed by sticker id
+_thumb_queue = []  # stickers whose composed thumbnail is not cached yet
+_THUMB_PREFIX = "thumb:"
 _loaded = False
 
 # The UI list mirrors only the filtered result: a full CS2 library has
@@ -115,23 +121,55 @@ def on_selection_changed(state, context):
 
 def _clear_previews():
     global _previews
+    _thumb_queue.clear()
     if _previews is not None:
         _previews.clear()
 
 
-def preview_icon(sticker):
-    """icon_id for a sticker's base texture (0 if unavailable)."""
-    if _previews is None or sticker is None:
-        return 0
-    path = sticker.base_path
-    if not path:
-        return 0
-    if sticker.id not in _previews:
+def _load_preview(key, path):
+    if key not in _previews:
         try:
-            _previews.load(sticker.id, path, "IMAGE")
+            _previews.load(key, path, "IMAGE")
         except (OSError, KeyError, RuntimeError):
             return 0
-    return _previews[sticker.id].icon_id
+    return _previews[key].icon_id
+
+
+def preview_icon(sticker):
+    """icon_id for a sticker (0 if unavailable).
+
+    Prefers the composed thumbnail (cut out, finish hint). While that is not
+    cached yet, the plain base texture is shown and the thumbnail is queued:
+    building it creates images, which draw callbacks may not do."""
+    if _previews is None or sticker is None or not sticker.base_path:
+        return 0
+    key = _THUMB_PREFIX + sticker.id
+    if key in _previews:
+        return _previews[key].icon_id
+    path = thumbs.cache_path(sticker)
+    if os.path.isfile(path):
+        return _load_preview(key, path)
+    if sticker not in _thumb_queue:
+        _thumb_queue.append(sticker)
+        if not bpy.app.timers.is_registered(_build_thumbs):
+            bpy.app.timers.register(_build_thumbs, first_interval=0.05)
+    return _load_preview(sticker.id, sticker.base_path)
+
+
+def _build_thumbs():
+    """Timer: build queued thumbnails for ~50 ms per tick."""
+    start = time.perf_counter()
+    while _thumb_queue and time.perf_counter() - start < 0.05:
+        sticker = _thumb_queue.pop(0)
+        try:
+            thumbs.build(sticker)
+        except Exception as exc:  # a broken texture must not stop the queue
+            utils.log.warning("cs.sticker: thumbnail for %s failed: %s", sticker.id, exc)
+    for window in getattr(bpy.context.window_manager, "windows", []):
+        for area in window.screen.areas:
+            if area.type == "VIEW_3D":
+                area.tag_redraw()
+    return 0.02 if _thumb_queue else None
 
 
 # ---------------------------------------------------------------------------
@@ -168,8 +206,10 @@ def unregister():
     global _previews
     if _on_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(_on_load_post)
-    if bpy.app.timers.is_registered(_deferred_refresh):
-        bpy.app.timers.unregister(_deferred_refresh)
+    for timer in (_deferred_refresh, _build_thumbs):
+        if bpy.app.timers.is_registered(timer):
+            bpy.app.timers.unregister(timer)
+    _thumb_queue.clear()
     if _previews is not None:
         bpy.utils.previews.remove(_previews)
         _previews = None

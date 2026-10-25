@@ -15,7 +15,8 @@ Shading model (approximating csgo_sticker.vfx):
 * Holo         mask R = strength, G/B = spectrum offset, A = multiplier;
                spectrum lookup shifts with view angle ("tilt")
 * Foil         metallic where mask, embossed via normal map
-* Gold         foil with gold tint multiplied into the base
+* Gold         foil with gold tint multiplied into the (optionally
+               desaturated) base, like CS2's legacy tint multiply
 * Lenticular   CS2: holo-style spectrum lookup through the mask (the spectrum
                holds the alternate images); fallback: horizontal frame
                strip picked by view angle. Lens coat with ridges
@@ -30,7 +31,7 @@ from .builder import GroupBuilder, principled, set_bsdf
 
 # Bump when group contents change; outdated groups are replaced (old ones
 # are renamed, so existing materials keep working until re-spawned).
-GROUP_VERSION = 3
+GROUP_VERSION = 4
 VERSION_KEY = "cs_sticker_version"
 
 PREFIX = "CS2 "
@@ -323,11 +324,18 @@ def _build_foil(tree, gold=False):
     else:
         tint = b.input("Foil Tint", "COLOR", default=(1.0, 1.0, 1.0, 1.0))
         amount = 1.0
+    saturation = b.input("Tint Saturation", default=1.0, lo=0.0, hi=1.0, factor=True,
+                         description="Base saturation before the tint is multiplied in "
+                                     "(CS2 gold signatures: about 0.1)")
     metal = b.input("Metallic", default=1.0, lo=0.0, hi=1.0, factor=True)
     rough = b.input("Roughness", default=0.22 if gold else 0.25, lo=0.0, hi=1.0, factor=True)
     wear = _wear_inputs(b)
 
-    tinted = b.mix("RGBA", amount, base, tint, x=-500, y=300, blend="MULTIPLY")
+    gray = b.node("ShaderNodeRGBToBW", -900, 450)
+    b.link(base, gray.inputs[0])
+    desat = b.mix("RGBA", saturation, gray.outputs[0], base, x=-700, y=450)
+    product = b.mix("RGBA", 1.0, desat, tint, x=-600, y=350, blend="MULTIPLY")
+    tinted = b.mix("RGBA", amount, base, product, x=-500, y=300)
     color = b.mix("RGBA", mask, base, tinted, x=-300, y=300)
     bsdf = principled(b)
     a, _ = _wear_alpha(b, alpha, wear)

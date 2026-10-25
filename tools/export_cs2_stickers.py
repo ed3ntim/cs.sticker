@@ -315,8 +315,8 @@ def build_library(out, raw, kits, tokens, collections, move):
         if finish == "GLITTER" and F.ROLE_GLITTER not in textures and F.ROLE_HOLOMASK in textures:
             textures[F.ROLE_GLITTER] = textures[F.ROLE_HOLOMASK]
         params = V.group_params(info)
-        if finish == "GOLD":
-            params["Tint Amount"] = 0.0  # CS2 gold albedo is already gold
+        if finish == "GOLD" and "Tint Amount" not in params:
+            params["Tint Amount"] = 0.0  # gold albedo texture, no shader tint
         stickers.append({
             "id": f"cs2_{kit_id}_{C.make_id(material)}",
             "name": name,

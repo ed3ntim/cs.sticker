@@ -188,6 +188,23 @@ class TestVmat(unittest.TestCase):
         self.assertEqual(V.group_params(V.parse_vmat_text(text, "a.vmat")), {"Wear Bias": 0.001})
         self.assertEqual(V.group_params(V.parse_vmat_text(LEGACY_VMAT, "a.vmat")), {})
 
+    def test_legacy_gold_tint(self):
+        # Gold signatures: plain texture + desaturate + boosted tint multiply.
+        text = cs2_vmat('\t"g_bLegacyTintMultiplySticker0"\t"1"\n'
+                        '\t"g_vColorTintSticker0"\t"[0.266667 0.180392 0.000000 0.000000]"\n'
+                        '\t"g_flTintSaturateSticker0"\t"0.1"\n'
+                        '\t"g_flColorBoostSticker0"\t"32"\n')
+        params = V.group_params(V.parse_vmat_text(text, "sig_x_gold.vmat"))
+        self.assertEqual(params["Gold Tint"], [1.0, 0.6765, 0.0, 1.0])
+        self.assertEqual(params["Foil Tint"], params["Gold Tint"])
+        self.assertEqual(params["Tint Amount"], 1.0)
+        self.assertAlmostEqual(params["Tint Saturation"], 0.1)
+        # Flag off or white tint: nothing to tint.
+        off = text.replace('"g_bLegacyTintMultiplySticker0"\t"1"', '"g_bLegacyTintMultiplySticker0"\t"0"')
+        self.assertNotIn("Gold Tint", V.group_params(V.parse_vmat_text(off, "a.vmat")))
+        white = text.replace("[0.266667 0.180392 0.000000", "[1.000000 1.000000 1.000000")
+        self.assertNotIn("Gold Tint", V.group_params(V.parse_vmat_text(white, "a.vmat")))
+
     def test_resolve_cs2_layout(self):
         with tempfile.TemporaryDirectory() as root:
             alyx = os.path.join(root, "stickers", "alyx")

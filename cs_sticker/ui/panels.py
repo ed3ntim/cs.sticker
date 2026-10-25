@@ -124,6 +124,9 @@ class CSSTICKER_PT_place(_Base, bpy.types.Panel):
         layout.prop(settings, "attach")
         layout.prop(settings, "align_up")
         layout.prop(settings, "unique_material")
+        row = layout.row()
+        row.alignment = "RIGHT"
+        row.operator("cs_sticker.reset_placement", icon="LOOP_BACK")
 
         layout.use_property_split = False
         has_sticker = registry.selected_sticker(context) is not None
