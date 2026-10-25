@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "collection": "Demo Capsule",
+  "stickers": [
+    {
+      "id": "demo_paper_star",
+      "name": "Demo Star",
+      "collection": "Demo Capsule",
+      "finish": "PAPER",
+      "textures": {
+        "base": "textures/demo_paper_star_color.png"
+      },
+      "params": {},
+      "tags": [
+        "demo",
+        "star"
+      ]
+    },
+    {
+      "id": "demo_glitter_heart",
+      "name": "Demo Heart",
+      "collection": "Demo Capsule",
+      "finish": "GLITTER",
+      "textures": {
+        "base": "textures/demo_glitter_heart_color.png",
+        "glitter": "textures/demo_glitter_heart_glitter.png"
+      },
+      "params": {},
+      "tags": [
+        "demo",
+        "heart"
+      ]
+    },
+    {
+      "id": "demo_holo_rings",
+      "name": "Demo Rings",
+      "collection": "Demo Capsule",
+      "finish": "HOLO",
+      "textures": {
+        "base": "textures/demo_holo_rings_color.png",
+        "holomask": "textures/demo_holo_rings_holomask.png",
+        "holospectrum": "textures/demo_holo_rings_holospectrum.png"
+      },
+      "params": {},
+      "tags": [
+        "demo",
+        "rings"
+      ]
+    },
+    {
+      "id": "demo_foil_shield",
+      "name": "Demo Shield",
+      "collection": "Demo Capsule",
+      "finish": "FOIL",
+      "textures": {
+        "base": "textures/demo_foil_shield_color.png",
+        "normal": "textures/demo_foil_shield_normal.png"
+      },
+      "params": {},
+      "tags": [
+        "demo",
+        "shield"
+      ]
+    },
+    {
+      "id": "demo_gold_crown",
+      "name": "Demo Crown",
+      "collection": "Demo Capsule",
+      "finish": "GOLD",
+      "textures": {
+        "base": "textures/demo_gold_crown_color.png",
+        "normal": "textures/demo_gold_crown_normal.png"
+      },
+      "params": {},
+      "tags": [
+        "demo",
+        "crown"
+      ]
+    },
+    {
+      "id": "demo_lenticular_eye",
+      "name": "Demo Eye",
+      "collection": "Demo Capsule",
+      "finish": "LENTICULAR",
+      "textures": {
+        "base": "textures/demo_lenticular_eye_color.png"
+      },
+      "params": {
+        "frames": 2
+      },
+      "tags": [
+        "demo",
+        "eye"
+      ]
+    },
+    {
+      "id": "demo_embroidered_patch",
+      "name": "Demo Patch",
+      "collection": "Demo Capsule",
+      "finish": "EMBROIDERED",
+      "textures": {
+        "base": "textures/demo_embroidered_patch_color.png",
+        "normal": "textures/demo_embroidered_patch_normal.png"
+      },
+      "params": {},
+      "tags": [
+        "demo",
+        "patch"
+      ]
+    }
+  ]
+}

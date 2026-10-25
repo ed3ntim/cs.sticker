@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+id = "cs_sticker"
+version = "1.0.0"
+name = "cs.sticker"
+tagline = "Place CS2 stickers on meshes with finish-accurate materials"
+maintainer = "ed3n <contact@ed3n.gallery>"
+type = "add-on"
+
+blender_version_min = "4.5.0"
+
+license = ["SPDX:PolyForm-Noncommercial-1.0.0"]
+copyright = ["2026 ed3n"]
+
+tags = ["Material", "Object", "3D View"]
+
+[permissions]
+files = "Read sticker textures and .vmat files from a user folder"

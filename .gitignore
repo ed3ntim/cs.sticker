@@ -1,0 +1,40 @@
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Build output (release zip is built locally / attached to releases)
+dist/
+build/
+*.zip
+
+# Blender
+*.blend1
+*.blend@
+blender_manifest.toml.bak
+
+# User sticker exports (never commit Valve game assets)
+user_stickers/
+exports/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Publish worktree (tools/publish.py)
+.publish/
+
+# Personal full builds: Valve assets, never commit
+cs_sticker/stickers/bundled/
