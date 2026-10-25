@@ -166,6 +166,86 @@ class TestMaterials(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertTrue(material.sticker_group_node(mat).inputs["Emission Mask"].is_linked)
 
+    def test_wear_mask_wiring(self):
+        from cs_sticker.library.catalog import Sticker
+        tex = os.path.join(utils.CORE_LIBRARY_DIR, "textures")
+        s = Sticker(id="worn", name="Worn", collection="X", finish="FOIL", textures={
+            "base": os.path.join(tex, "demo_foil_shield_color.png"),
+            "normal": os.path.join(tex, "demo_foil_shield_normal.png"),
+            "wearmask": os.path.join(tex, "demo_glitter_heart_glitter.png"),
+            "scratches": os.path.join(tex, "demo_holo_rings_holomask.png"),
+        }, params={"Wear Bias": 2.04, "Wear Scratches": 0.5})
+        mat, warnings = material.build_material(s)
+        self.assertEqual(warnings, [])
+        grp = material.sticker_group_node(mat)
+        self.assertTrue(grp.inputs["Wear Mask"].is_linked)
+        self.assertTrue(grp.inputs["Scratches"].is_linked)
+        self.assertEqual(grp.inputs["Use Wear Mask"].default_value, 1.0)
+        self.assertAlmostEqual(grp.inputs["Wear Bias"].default_value, 2.04, places=5)
+        self.assertAlmostEqual(grp.inputs["Wear Scratches"].default_value, 0.5, places=5)
+
+    def test_wear_seed_per_sticker(self):
+        from cs_sticker.library.catalog import Sticker
+        base = {"base": os.path.join(utils.CORE_LIBRARY_DIR, "textures", "demo_paper_star_color.png")}
+
+        def seed(sid, params=None):
+            mat, _ = material.build_material(
+                Sticker(id=sid, name=sid, collection="X", finish="PAPER", textures=base, params=params or {}))
+            return material.sticker_group_node(mat).inputs["Wear Seed"].default_value
+
+        self.assertAlmostEqual(seed("cs2_1_a"), material.sticker_seed("cs2_1_a"), places=4)
+        self.assertNotAlmostEqual(seed("cs2_1_a"), seed("cs2_2_b"), places=3)
+        self.assertEqual(material.sticker_seed("x"), material.sticker_seed("x"))
+        self.assertAlmostEqual(seed("cs2_3_c", {"Wear Seed": 7.0}), 7.0, places=5)
+
+    def test_wear_mask_order_render(self):
+        """Low mask values wear off first: with Wear 0.5 the left half
+        (mask 0.1) is gone, the right half (mask 0.9) stays."""
+        from cs_sticker.library.catalog import Sticker
+        with tempfile.TemporaryDirectory() as root:
+            def png(name, fill):
+                img = bpy.data.images.new(name, 16, 16)
+                img.pixels = [v for i in range(256) for v in fill(i % 16)]
+                img.filepath_raw = os.path.join(root, name + ".png")
+                img.file_format = "PNG"
+                img.save()
+                bpy.data.images.remove(img)
+                return os.path.join(root, name + ".png")
+
+            base = png("base", lambda x: (1.0, 1.0, 1.0, 1.0))
+            mask = png("mask", lambda x: (0.1, 0.1, 0.1, 1.0) if x < 8 else (0.9, 0.9, 0.9, 1.0))
+            s = Sticker(id="order", name="Order", collection="X", finish="PAPER",
+                        textures={"base": base, "wearmask": mask}, params={"Wear": 0.5})
+            mat, warnings = material.build_material(s)
+            self.assertEqual(warnings, [])
+
+            bpy.ops.mesh.primitive_plane_add(size=2.0)
+            plane = bpy.context.active_object
+            plane.data.materials.append(mat)
+            cam_data = bpy.data.cameras.new("cam")
+            cam_data.type = "ORTHO"
+            cam_data.ortho_scale = 2.0
+            cam = bpy.data.objects.new("cam", cam_data)
+            cam.location = (0, 0, 3)
+            bpy.context.scene.collection.objects.link(cam)
+            scene = bpy.context.scene
+            scene.camera = cam
+            scene.render.engine = "CYCLES"
+            scene.cycles.samples = 4
+            scene.cycles.device = "CPU"
+            scene.render.film_transparent = True
+            scene.render.resolution_x = scene.render.resolution_y = 16
+            scene.render.resolution_percentage = 100
+            scene.render.image_settings.file_format = "PNG"
+            scene.render.image_settings.color_mode = "RGBA"
+            scene.render.filepath = os.path.join(root, "out.png")
+            bpy.ops.render.render(write_still=True)
+            out = bpy.data.images.load(scene.render.filepath)
+            px = list(out.pixels)
+            alpha = lambda x, y: px[(y * 16 + x) * 4 + 3]
+            self.assertLess(alpha(3, 8), 0.1)
+            self.assertGreater(alpha(12, 8), 0.9)
+
     def test_missing_textures_fallback(self):
         from cs_sticker.library.catalog import Sticker
         s = Sticker(id="ghost", name="Ghost", collection="X", finish="HOLO",

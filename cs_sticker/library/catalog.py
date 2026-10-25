@@ -220,7 +220,8 @@ def stickers_from_vmats(folder, files, collection, report, source=SOURCE_USER):
             collection=collection,
             finish=info.finish or F.DEFAULT_FINISH,
             textures=textures,
-            params={k: v for k, v in info.params.items() if k.lower() != "shader"},
+            params=dict({k: v for k, v in info.params.items() if k.lower() != "shader"},
+                        **V.group_params(info)),
             source=source,
             origin=path,
         ))

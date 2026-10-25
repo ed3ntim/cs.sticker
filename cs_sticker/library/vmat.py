@@ -26,6 +26,7 @@ _PAIR_RE = re.compile(
 # "holomask" is not caught by "mask" and "holospectrum" not by "holo".
 _ROLE_KEYWORDS = (
     (F.ROLE_WEARMASK, ("wearmask", "wear_mask")),
+    (F.ROLE_SCRATCHES, ("stickerscratches", "scratches")),
     (F.ROLE_HOLOSPECTRUM, ("holospectrum", "holo_spectrum", "spectrum", "holowarp", "holo_warp", "warp")),
     (F.ROLE_HOLOMASK, ("holomask", "holo_mask", "holo")),
     (F.ROLE_GLITTER, ("glittermask", "glitter_mask", "glitter", "sparkle")),
@@ -36,8 +37,11 @@ _ROLE_KEYWORDS = (
 )
 
 # Keys that look like a role but are something else (glitter flake normals,
-# scratch overlays, backing AO).
-_IGNORED_KEY_WORDS = ("glitternormal", "scratches", "ambientocclusion", "backing")
+# backing AO).
+_IGNORED_KEY_WORDS = ("glitternormal", "ambientocclusion", "backing")
+
+# Shared by all sticker layers, so it has no "Sticker0" suffix.
+_LAYER_INDEPENDENT_ROLES = (F.ROLE_SCRATCHES,)
 
 # CS2 sticker layer keys end with this (TextureColorSticker0, ...).
 STICKER_LAYER_SUFFIX = "sticker0"
@@ -110,11 +114,12 @@ class VmatInfo:
 
 def _is_default_texture(value, role):
     """Engine defaults (flat normal, default masks) carry no sticker data.
-    The default holo spectrum is the exception: holo stickers use it."""
+    The default holo spectrum and scratches are the exception: stickers use
+    them as they are."""
     low = value.replace("\\", "/").lower()
     if not low.startswith("materials/default/"):
         return False
-    return role != F.ROLE_HOLOSPECTRUM
+    return role not in (F.ROLE_HOLOSPECTRUM, F.ROLE_SCRATCHES)
 
 
 def parse_vmat_text(text, path=""):
@@ -139,14 +144,17 @@ def parse_vmat_text(text, path=""):
         info.params.setdefault(key, value)
         if key.lower() == "shader":
             info.shader = value
-        elif value.lower().endswith(IMAGE_EXTENSIONS + (".vtex",)):
+        elif value.lower().endswith(IMAGE_EXTENSIONS + (".vtex", ".psd")):
             pairs.append((key, value))
 
     layered = any(k.lower().endswith(STICKER_LAYER_SUFFIX) for k, _ in pairs)
     for key, value in pairs:
         if layered and not key.lower().endswith(STICKER_LAYER_SUFFIX):
-            continue
-        role = role_from_key(key[: -len(STICKER_LAYER_SUFFIX)] if layered else key)
+            role = role_from_key(key)
+            if role not in _LAYER_INDEPENDENT_ROLES:
+                continue
+        else:
+            role = role_from_key(key[: -len(STICKER_LAYER_SUFFIX)] if layered else key)
         if role and role not in info.textures and not _is_default_texture(value, role):
             info.textures[role] = value
     # Self-illuminated CS2 stickers store their glow mask in the normal slot.
@@ -158,6 +166,26 @@ def parse_vmat_text(text, path=""):
 
 def _flag(info, key):
     return info.params.get(key, "0").strip() not in ("0", "", "0.0")
+
+
+def _floats(value):
+    try:
+        return [float(v) for v in value.strip("[] ").replace(",", " ").split()]
+    except ValueError:
+        return []
+
+
+def group_params(info):
+    """CS2 material values that map onto finish group inputs (per sticker
+    wear behaviour). Keys are group input names."""
+    out = {}
+    bias = _floats(info.params.get("g_vWearBiasSticker0", ""))
+    if bias:
+        out["Wear Bias"] = min(4.0, max(0.001, bias[0]))
+    scratches = _floats(info.params.get("g_fWearScratchesSticker0", ""))
+    if scratches:
+        out["Wear Scratches"] = min(1.0, max(0.0, scratches[0]))
+    return out
 
 
 # CS2 csgo_weapon_sticker.vfx feature switches -> finish.

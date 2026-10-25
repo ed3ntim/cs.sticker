@@ -102,7 +102,14 @@ the available maps.
 
 Each finish is a reusable node group (`CS2 Sticker <Finish>`) that takes
 texture samples as inputs and drives a Principled BSDF. Every group has
-Wear / Wear Scale / Wear Seed and Alpha Clip.
+the same wear inputs and Alpha Clip.
+
+**Wear** works per sticker, like in CS2: each CS2 sticker has its own wear
+mask whose gray value sets the order in which areas scrape off (background
+first, logo last), plus its own wear bias and scratch amount from the
+material (`g_vWearBiasSticker0`, `g_fWearScratchesSticker0`). Stickers
+without a wear mask use seeded noise instead. Every sticker gets its own
+Wear Seed derived from its id; you can change it in *Active Sticker*.
 
 | Finish | Maps | Implementation |
 |---|---|---|

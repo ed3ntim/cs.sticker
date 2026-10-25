@@ -314,7 +314,7 @@ def build_library(out, raw, kits, tokens, collections, move):
         # Glitter stickers: the "holo" mask slot is their glitter mask.
         if finish == "GLITTER" and F.ROLE_GLITTER not in textures and F.ROLE_HOLOMASK in textures:
             textures[F.ROLE_GLITTER] = textures[F.ROLE_HOLOMASK]
-        params = {}
+        params = V.group_params(info)
         if finish == "GOLD":
             params["Tint Amount"] = 0.0  # CS2 gold albedo is already gold
         stickers.append({

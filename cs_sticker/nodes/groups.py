@@ -21,7 +21,7 @@ Shading model (approximating csgo_sticker.vfx):
                strip picked by view angle. Lens coat with ridges
 * Embroidered  rough fabric with sheen and stitched thread relief
 
-Every finish group exposes Wear / Wear Scale / Wear Seed and Alpha Clip.
+Every finish group exposes the wear inputs (see _build_wear) and Alpha Clip.
 """
 
 import bpy
@@ -30,7 +30,7 @@ from .builder import GroupBuilder, principled, set_bsdf
 
 # Bump when group contents change; outdated groups are replaced (old ones
 # are renamed, so existing materials keep working until re-spawned).
-GROUP_VERSION = 2
+GROUP_VERSION = 3
 VERSION_KEY = "cs_sticker_version"
 
 PREFIX = "CS2 "
@@ -45,16 +45,39 @@ def group_name(finish_id):
 # Helper groups
 # ---------------------------------------------------------------------------
 
+def _wear_sockets(b):
+    """Wear inputs shared by the Wear & Clip group and every finish group."""
+    return {
+        "Wear": b.input("Wear", default=0.0, lo=0.0, hi=1.0, factor=True,
+                        description="Scraped-off amount, like the in-game sticker wear"),
+        "Wear Scale": b.input("Wear Scale", default=12.0, lo=0.0, hi=1000.0,
+                              description="Noise scale of the wear pattern (stickers without wear mask)"),
+        "Wear Seed": b.input("Wear Seed", default=0.0,
+                             description="Varies the scratch / noise pattern. Set per sticker on spawn"),
+        "Wear Mask": b.input("Wear Mask", default=0.0, lo=0.0, hi=1.0, factor=True,
+                             description="CS2 wear mask: low values wear off first"),
+        "Use Wear Mask": b.input("Use Wear Mask", default=0.0, lo=0.0, hi=1.0, factor=True),
+        "Wear Bias": b.input("Wear Bias", default=1.0, lo=0.001, hi=4.0,
+                             description="CS2 g_vWearBias: higher = the sticker resists wear longer"),
+        "Scratches": b.input("Scratches", default=0.5, lo=0.0, hi=1.0, factor=True),
+        "Wear Scratches": b.input("Wear Scratches", default=1.0, lo=0.0, hi=1.0, factor=True,
+                                  description="CS2 g_fWearScratches: how much the scratch texture breaks up the wear edge"),
+        "Alpha Clip": b.input("Alpha Clip", default=0.5, lo=0.0, hi=1.0, factor=True,
+                              description="Alpha threshold for hard clipping. 0 = soft alpha"),
+    }
+
+
 def _build_wear(tree):
-    """Alpha (+ wear scratches) -> clipped alpha. Outputs Alpha, Intact."""
+    """Alpha + wear -> clipped alpha. Outputs Alpha, Intact.
+
+    CS2 stickers carry their own wear mask: the gray value is the order in
+    which areas scrape off (background low, logo high). A pixel survives
+    while mask + scratch offset > Wear / Wear Bias. Stickers without a mask
+    fall back to seeded noise."""
     b = GroupBuilder(tree)
     alpha = b.input("Alpha", default=1.0, lo=0.0, hi=1.0, factor=True)
-    clip = b.input("Alpha Clip", default=0.5, lo=0.0, hi=1.0, factor=True,
-                   description="Alpha threshold for hard clipping. 0 = soft alpha")
-    wear = b.input("Wear", default=0.0, lo=0.0, hi=1.0, factor=True,
-                   description="Scraped-off amount, like the in-game sticker wear")
-    scale = b.input("Wear Scale", default=12.0, lo=0.0, hi=1000.0)
-    seed = b.input("Wear Seed", default=0.0)
+    s = _wear_sockets(b)
+    clip, wear, scale, seed = s["Alpha Clip"], s["Wear"], s["Wear Scale"], s["Wear Seed"]
     out_alpha = b.output("Alpha", "FLOAT")
     out_intact = b.output("Intact", "FLOAT")
 
@@ -74,7 +97,24 @@ def _build_wear(tree):
     lo = b.math("SUBTRACT", center, 0.04, y=-150)
     hi = b.math("ADD", center, 0.04, y=-300)
     b.column(-300)
-    intact = b.map_range((noise, "Fac"), lo, hi, 0.0, 1.0, interpolation="SMOOTHSTEP")
+    intact_noise = b.map_range((noise, "Fac"), lo, hi, 0.0, 1.0, interpolation="SMOOTHSTEP")
+
+    # Wear mask path: threshold = wear / bias, scratches shift the edge.
+    b.column(-500)
+    threshold = b.math("DIVIDE", wear, s["Wear Bias"], y=-450)
+    scratch = b.math("SUBTRACT", s["Scratches"], 0.5, y=-600)
+    scratch = b.math("MULTIPLY", scratch, s["Wear Scratches"], x=-350, y=-600)
+    durability = b.math("MULTIPLY_ADD", scratch, 0.35, x=-200, y=-600)
+    b.links.new(s["Wear Mask"], durability.node.inputs[2])
+    # Small seeded jitter so two copies of a sticker do not wear identically.
+    jitter = b.math("MULTIPLY_ADD", (noise, "Fac"), 0.1, x=-350, y=-750)
+    jitter.node.inputs[2].default_value = -0.05
+    durability = b.math("ADD", durability, jitter, x=-200, y=-750)
+    t_lo = b.math("SUBTRACT", threshold, 0.015, x=-350, y=-450)
+    t_hi = b.math("ADD", threshold, 0.015, x=-350, y=-350)
+    intact_mask = b.map_range(durability, t_lo, t_hi, 0.0, 1.0, x=-50, y=-450,
+                              interpolation="SMOOTHSTEP")
+    intact = b.mix("FLOAT", s["Use Wear Mask"], intact_noise, intact_mask, x=-150, y=0)
     # Wear exactly 0 must leave the sticker untouched.
     no_wear = b.math("SUBTRACT", 1.0, b.math("CEIL", wear, x=-300, y=-200), x=-150, y=-200)
     intact = b.math("MAXIMUM", intact, no_wear, x=0, y=0)
@@ -174,12 +214,7 @@ def _common_inputs(b, normal_strength=1.0):
 
 
 def _wear_inputs(b):
-    return {
-        "Wear": b.input("Wear", default=0.0, lo=0.0, hi=1.0, factor=True),
-        "Wear Scale": b.input("Wear Scale", default=12.0, lo=0.0, hi=1000.0),
-        "Wear Seed": b.input("Wear Seed", default=0.0),
-        "Alpha Clip": b.input("Alpha Clip", default=0.5, lo=0.0, hi=1.0, factor=True),
-    }
+    return _wear_sockets(b)
 
 
 def _normal_map(b, ncol, nstr, x=-300, y=-450):

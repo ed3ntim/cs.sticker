@@ -14,20 +14,24 @@ ROLE_GLITTER = "glitter"          # glitter mask (where flakes appear)
 ROLE_ROUGHNESS = "roughness"
 ROLE_METALNESS = "metalness"      # foil / metal mask
 ROLE_EMISSION = "emission"        # self-illumination mask (CS2 g_bSelfIllum)
-# CS2 TextureWearMaskSticker0: grayscale, 0 outside the sticker and small
-# values inside (they encode the wear order). CS2 color maps are RGB, so this
-# is where the sticker shape (alpha) comes from.
+# CS2 TextureWearMaskSticker0: grayscale, 0 outside the sticker, inside the
+# value is the wear order (low parts scrape off first). CS2 color maps are
+# RGB, so this is also where the sticker shape (alpha) comes from.
 ROLE_WEARMASK = "wearmask"
+# CS2 TextureStickerScratches: shared scratch pattern (R) that breaks up the
+# wear edge. Usually the engine default, which is kept (unlike other defaults).
+ROLE_SCRATCHES = "scratches"
 
 ALL_ROLES = (
     ROLE_BASE, ROLE_NORMAL, ROLE_HOLOMASK, ROLE_HOLOSPECTRUM,
     ROLE_GLITTER, ROLE_ROUGHNESS, ROLE_METALNESS, ROLE_EMISSION, ROLE_WEARMASK,
+    ROLE_SCRATCHES,
 )
 
 # Roles whose pixels are data, not color (loaded as Non-Color).
 DATA_ROLES = frozenset({
     ROLE_NORMAL, ROLE_HOLOMASK, ROLE_GLITTER, ROLE_ROUGHNESS, ROLE_METALNESS, ROLE_EMISSION,
-    ROLE_WEARMASK,
+    ROLE_WEARMASK, ROLE_SCRATCHES,
 })
 
 

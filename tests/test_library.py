@@ -169,6 +169,25 @@ class TestVmat(unittest.TestCase):
         self.assertNotIn("normal", info.textures)
         self.assertEqual(info.finish, "PAPER")
 
+    def test_cs2_wear(self):
+        # Per-sticker wear: own mask, bias and scratch amount, shared
+        # default scratch texture (no Sticker0 suffix, engine default kept).
+        text = cs2_vmat('\t"g_vWearBiasSticker0"\t"[2.040000 -1.805000 0.000000 0.000000]"\n'
+                        '\t"g_fWearScratchesSticker0"\t"0.858"\n',
+                        '\t"TextureColorSticker0"\t"stickers/x/a.png"\n'
+                        '\t"TextureWearMaskSticker0"\t"stickers/x/a_1234abcd-A.png"\n'
+                        '\t"TextureStickerScratches"\t"materials/default/stickers/sticker_default_scratches.psd"\n')
+        info = V.parse_vmat_text(text, "a.vmat")
+        self.assertEqual(info.textures["wearmask"], "stickers/x/a_1234abcd-A.png")
+        self.assertEqual(info.textures["scratches"], "materials/default/stickers/sticker_default_scratches.psd")
+        self.assertEqual(V.group_params(info), {"Wear Bias": 2.04, "Wear Scratches": 0.858})
+
+    def test_wear_params_clamped_and_optional(self):
+        text = cs2_vmat('\t"g_vWearBiasSticker0"\t"[0.000000 1.000000 0.000000 0.000000]"\n'
+                        '\t"g_fWearScratchesSticker0"\t"garbage"\n')
+        self.assertEqual(V.group_params(V.parse_vmat_text(text, "a.vmat")), {"Wear Bias": 0.001})
+        self.assertEqual(V.group_params(V.parse_vmat_text(LEGACY_VMAT, "a.vmat")), {})
+
     def test_resolve_cs2_layout(self):
         with tempfile.TemporaryDirectory() as root:
             alyx = os.path.join(root, "stickers", "alyx")

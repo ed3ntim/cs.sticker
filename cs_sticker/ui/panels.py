@@ -179,7 +179,7 @@ class CSSTICKER_PT_active(_Base, bpy.types.Panel):
             # Only plain values the user can tweak; texture-driven ones are linked.
             if sock.is_linked or not hasattr(sock, "default_value") or sock.type == "SHADER":
                 continue
-            if sock.name in ("Normal Color", "Holo Mask"):
+            if sock.name in ("Normal Color", "Holo Mask", "Use Wear Mask", "Scratches", "Wear Mask"):
                 continue
             col.prop(sock, "default_value", text=sock.name)
 

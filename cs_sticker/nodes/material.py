@@ -4,6 +4,7 @@
 wired into the finish node group from groups.py."""
 
 import os
+import zlib
 
 import bpy
 
@@ -118,7 +119,10 @@ def build_material(sticker, unique=True):
         n.label = role.title()
         n.location = (-450, y)
         n.interpolation = "Linear"
-        n.extension = "CLIP" if role in (F.ROLE_BASE, F.ROLE_WEARMASK) else "EXTEND"
+        if role in (F.ROLE_BASE, F.ROLE_WEARMASK):
+            n.extension = "CLIP"
+        else:
+            n.extension = "REPEAT" if role == F.ROLE_SCRATCHES else "EXTEND"
         if vector is not None:
             links.new(vector, n.inputs["Vector"])
         return n
@@ -158,6 +162,12 @@ def build_material(sticker, unique=True):
         shape.location = (-150, 450)
         links.new(wearmask.outputs["Color"], shape.inputs[0])
         wire(shape.outputs[0], "Alpha")
+        # Gray value = wear order: each CS2 sticker wears its own way.
+        wire(wearmask.outputs["Color"], "Wear Mask")
+        _set_input(grp, "Use Wear Mask", 1.0)
+        scratches = tex_node(F.ROLE_SCRATCHES, 900) if F.ROLE_SCRATCHES in sticker.textures else None
+        if scratches:
+            wire(scratches.outputs["Color"], "Scratches")
     else:
         wire(base.outputs["Alpha"], "Alpha")
 
@@ -215,17 +225,29 @@ def _wire_holo(sticker, nodes, links, tex_node, wire):
         wire(proc.outputs["Color"], "Spectrum Color")
 
 
+def sticker_seed(sticker_id):
+    """Stable per-sticker wear seed (0..99.9), so every sticker gets its own
+    wear / scratch pattern without manual tweaking."""
+    return (zlib.crc32(sticker_id.encode("utf-8")) % 1000) / 10.0
+
+
+def _set_input(grp, key, value):
+    sock = grp.inputs.get(key)
+    if sock is None or sock.is_linked or not hasattr(sock, "default_value"):
+        return False
+    try:
+        sock.default_value = value
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def _apply_params(sticker, grp):
     """Catalog ``params`` whose key matches a group input set its default,
     e.g. {"Holo Strength": 0.8}. Other keys (vmat values) are ignored."""
+    _set_input(grp, "Wear Seed", sticker_seed(sticker.id))
     for key, value in sticker.params.items():
-        sock = grp.inputs.get(key)
-        if sock is None or sock.is_linked or not hasattr(sock, "default_value"):
-            continue
-        try:
-            sock.default_value = value
-        except (TypeError, ValueError):
-            pass
+        _set_input(grp, key, value)
 
 
 def sticker_group_node(mat):
