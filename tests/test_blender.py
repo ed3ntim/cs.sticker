@@ -379,6 +379,27 @@ class TestPlacement(unittest.TestCase):
                 self.assertAlmostEqual(x, 1.0 + P.surface_offset(bpy.context.scene.cs_sticker_place, width), 3)
         self.assertEqual(len(bpy.data.collections[utils.STICKER_COLLECTION_NAME].objects), 7)
 
+    def test_scenes_keep_their_stickers(self):
+        cube = add_cube()
+        bpy.context.scene.cursor.location = (3, 0.2, 0.1)
+        select_sticker("demo_paper_star")
+        cube.select_set(True)
+        bpy.context.view_layer.objects.active = cube
+        self.assertEqual(bpy.ops.cs_sticker.spawn(mode="SURFACE"), {"FINISHED"})
+        first = bpy.context.scene
+        mine = set(first.objects)
+        second = bpy.data.scenes.new("Second")
+        try:
+            with bpy.context.temp_override(scene=second, view_layer=second.view_layers[0]):
+                coll = utils.sticker_collection(bpy.context)
+                self.assertIs(utils.sticker_collection(bpy.context), coll)
+            self.assertFalse(mine & set(second.objects))
+            self.assertNotIn(coll, list(first.collection.children_recursive))
+            self.assertIn(coll, list(second.collection.children_recursive))
+            self.assertEqual(set(first.objects), mine)
+        finally:
+            bpy.data.scenes.remove(second)
+
     def test_relative_size(self):
         settings = bpy.context.scene.cs_sticker_place
         cube = add_cube()

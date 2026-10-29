@@ -4,9 +4,7 @@ Blender add-on that places CS2 stickers on mesh surfaces with a material
 setup per finish: Paper, Glitter, Holo, Foil, Gold, Lenticular, Embroidered.
 Target: Blender 5.2, compatible back to 4.5.
 
-**For plugin excluding the sticker assets (CS2 export required) [⬇ Download cs_sticker.zip (latest release)](https://github.com/ed3ntim/cs.sticker/releases/latest/download/cs_sticker.zip)**
-
-**For the version including all sticker assets visit my page [⬇ Download cs_sticker-1.4.0 - all sticker.zip](https://ed3n.gallery/apps/cs-sticker/)**
+**[⬇ Download cs_sticker.zip (latest release)](https://github.com/ed3ntim/cs.sticker/releases/latest/download/cs_sticker.zip)**
 
 ## Installation
 

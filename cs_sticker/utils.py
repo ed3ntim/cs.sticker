@@ -19,6 +19,7 @@ BUNDLED_LIBRARY_DIR = os.path.join(ADDON_DIR, "stickers", "bundled")
 # Custom property keys stored on spawned sticker objects.
 PROP_STICKER_ID = "cs_sticker_id"
 PROP_STICKER_FINISH = "cs_sticker_finish"
+PROP_COLLECTION = "cs_sticker_collection"  # on the per-scene sticker collections
 
 # Name of the material node that hosts the finish node group.
 STICKER_NODE_NAME = "CS2_STICKER"
@@ -48,11 +49,15 @@ def is_sticker(obj):
 
 
 def sticker_collection(context):
-    """Get (or create) the collection that holds all spawned stickers."""
-    coll = bpy.data.collections.get(STICKER_COLLECTION_NAME)
-    if coll is None:
-        coll = bpy.data.collections.new(STICKER_COLLECTION_NAME)
-    # Link to the scene root only if the user has not nested it elsewhere.
-    if coll not in context.scene.collection.children_recursive:
-        context.scene.collection.children.link(coll)
+    """Get (or create) the collection that holds the stickers of this scene.
+
+    Every scene gets its own: a collection linked into two scenes shows
+    the same objects in both. Older files match by name."""
+    scene = context.scene
+    for coll in scene.collection.children_recursive:
+        if PROP_COLLECTION in coll or coll.name == STICKER_COLLECTION_NAME:
+            return coll
+    coll = bpy.data.collections.new(STICKER_COLLECTION_NAME)
+    coll[PROP_COLLECTION] = True
+    scene.collection.children.link(coll)
     return coll

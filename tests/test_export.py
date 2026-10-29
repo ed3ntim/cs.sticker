@@ -143,6 +143,32 @@ class TestBuildLibrary(unittest.TestCase):
             self.assertEqual(len(cat.stickers), 3)
             self.assertEqual(cat.report.warnings[1:], [])  # only "core catalog not found"
 
+    def test_glitter_flakes(self):
+        # Every CS2 sticker references the shared flake normal; only glitter keeps it.
+        flakes = '\t"TextureGlitterNormalSticker0"\t"materials/default/stickers/squares_glitter_normal.tga"\n'
+        with tempfile.TemporaryDirectory() as out:
+            raw = os.path.join(out, X.RAW_DIR)
+            write(os.path.join(raw, "materials", "default", "stickers", "squares_glitter_normal_tga_25145674.png"),
+                  b"png", binary=True)
+            d = os.path.join(raw, "stickers", "antwerp2022")
+            for name, flag in (("astr_glitter", "g_bGlitterSticker0"), ("astr_holo", "g_bHolographicSticker0")):
+                write(os.path.join(d, f"{name}.vmat"),
+                      f'"Layer0"\n{{\n\t"shader"\t"csgo_weapon_sticker.vfx"\n\t"{flag}"\t"1"\n{flakes}'
+                      f'\t"TextureHoloMaskSticker0"\t"stickers/antwerp2022/{name}_mask.png"\n'
+                      f'\t"TextureColorSticker0"\t"stickers/antwerp2022/astr.png"\n}}\n')
+                write(os.path.join(d, f"{name}_mask.png"), b"png", binary=True)
+            write(os.path.join(d, "astr.png"), b"png", binary=True)
+            kits = {"1": {"item_name": "#a", "sticker_material": "antwerp2022/astr_glitter"},
+                    "2": {"item_name": "#b", "sticker_material": "antwerp2022/astr_holo"}}
+            stickers, _, missing, _ = X.build_library(out, raw, kits, {}, [], move=True)
+
+            self.assertEqual(missing, 0)
+            by_finish = {s["finish"]: s for s in stickers}
+            rel = by_finish["GLITTER"]["textures"]["flakes"]
+            self.assertEqual(rel, "textures/materials/default/stickers/squares_glitter_normal_tga_25145674.png")
+            self.assertTrue(os.path.isfile(os.path.join(out, rel)))
+            self.assertNotIn("flakes", by_finish["HOLO"]["textures"])
+
 
 if __name__ == "__main__":
     unittest.main()
