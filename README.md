@@ -6,7 +6,7 @@ Target: Blender 5.2, compatible back to 4.5.
 
 **For plugin excluding the sticker assets (CS2 export required) [⬇ Download cs_sticker.zip (latest release)](https://github.com/ed3ntim/cs.sticker/releases/latest/download/cs_sticker.zip)**
 
-**For the version including all sticker assets visit my page [⬇ Download cs_sticker-1.4.0 - all sticker.zip](https://ed3n.gallery/apps/cs-sticker/)**
+**For the version including all sticker assets visit my page [⬇ Download cs_sticker-1.4.1 - all sticker.zip](https://ed3n.gallery/apps/cs-sticker/)**
 
 ## Installation
 
