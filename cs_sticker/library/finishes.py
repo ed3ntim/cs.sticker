@@ -21,17 +21,20 @@ ROLE_WEARMASK = "wearmask"
 # CS2 TextureStickerScratches: shared scratch pattern (R) that breaks up the
 # wear edge. Usually the engine default, which is kept (unlike other defaults).
 ROLE_SCRATCHES = "scratches"
+# CS2 TextureGlitterNormalSticker0: tiling flake normal map shared by all
+# glitter stickers (engine default squares_glitter_normal, kept like scratches).
+ROLE_FLAKES = "flakes"
 
 ALL_ROLES = (
     ROLE_BASE, ROLE_NORMAL, ROLE_HOLOMASK, ROLE_HOLOSPECTRUM,
     ROLE_GLITTER, ROLE_ROUGHNESS, ROLE_METALNESS, ROLE_EMISSION, ROLE_WEARMASK,
-    ROLE_SCRATCHES,
+    ROLE_SCRATCHES, ROLE_FLAKES,
 )
 
 # Roles whose pixels are data, not color (loaded as Non-Color).
 DATA_ROLES = frozenset({
     ROLE_NORMAL, ROLE_HOLOMASK, ROLE_GLITTER, ROLE_ROUGHNESS, ROLE_METALNESS, ROLE_EMISSION,
-    ROLE_WEARMASK, ROLE_SCRATCHES,
+    ROLE_WEARMASK, ROLE_SCRATCHES, ROLE_FLAKES,
 })
 
 
@@ -50,7 +53,7 @@ FINISHES = {
         Finish("PAPER", "Paper", "Matte printed sticker",
                (ROLE_BASE,), (ROLE_NORMAL, ROLE_ROUGHNESS, ROLE_EMISSION), "FILE_IMAGE"),
         Finish("GLITTER", "Glitter", "Sparkling metallic flakes",
-               (ROLE_BASE,), (ROLE_GLITTER, ROLE_NORMAL), "LIGHT_SUN"),
+               (ROLE_BASE,), (ROLE_GLITTER, ROLE_NORMAL, ROLE_FLAKES), "LIGHT_SUN"),
         Finish("HOLO", "Holo", "View-dependent holographic spectrum",
                (ROLE_BASE, ROLE_HOLOMASK), (ROLE_HOLOSPECTRUM, ROLE_NORMAL), "SHADING_RENDERED"),
         Finish("FOIL", "Foil", "Embossed metallic foil",

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 ed3n
-"""3D Viewport sidebar panels (N-panel, tab "CS Sticker")."""
+"""3D Viewport sidebar panels (N-panel, tab "cs.sticker")."""
 
 import math
 
@@ -16,7 +16,7 @@ from ..ops import placement as P
 class _Base:
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "CS Sticker"
+    bl_category = "cs.sticker"
 
 
 class CSSTICKER_PT_main(_Base, bpy.types.Panel):

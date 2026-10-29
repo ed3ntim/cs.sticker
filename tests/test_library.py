@@ -82,6 +82,7 @@ class TestRoleDetection(unittest.TestCase):
         self.assertEqual(V.role_from_key("TextureHoloSpectrum"), F.ROLE_HOLOSPECTRUM)
         self.assertEqual(V.role_from_key("g_tHoloWarp"), F.ROLE_HOLOSPECTRUM)
         self.assertEqual(V.role_from_key("TextureGlitterMask"), F.ROLE_GLITTER)
+        self.assertEqual(V.role_from_key("TextureGlitterNormal"), F.ROLE_FLAKES)
         self.assertIsNone(V.role_from_key("g_flSomething"))
 
     def test_split_texture_name(self):
@@ -144,6 +145,17 @@ class TestVmat(unittest.TestCase):
                         '\t"TextureColorSticker0"\t"stickers/x/a.png"\n')
         info = V.parse_vmat_text(text, "a_holo.vmat")
         self.assertEqual(info.textures["holospectrum"], "materials/default/stickers/default_holospectrum.tga")
+
+    def test_cs2_glitter_flakes_kept(self):
+        # The shared flake normal is an engine default, but glitter uses it.
+        flakes = '\t"TextureGlitterNormalSticker0"\t"materials/default/stickers/squares_glitter_normal.tga"\n'
+        color = '\t"TextureColorSticker0"\t"stickers/x/a.png"\n'
+        info = V.parse_vmat_text(cs2_vmat('\t"g_bGlitterSticker0"\t"1"\n', flakes + color), "a_glitter.vmat")
+        self.assertEqual(info.finish, "GLITTER")
+        self.assertEqual(info.textures["flakes"], "materials/default/stickers/squares_glitter_normal.tga")
+        # Other finishes reference it too but do not use it.
+        info = V.parse_vmat_text(cs2_vmat('\t"g_bHolographicSticker0"\t"1"\n', flakes + color), "a_holo.vmat")
+        self.assertNotIn("flakes", info.textures)
 
     def test_cs2_finishes(self):
         metal = '\t"g_bMetallicSticker0"\t"1"\n'

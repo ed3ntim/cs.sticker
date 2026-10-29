@@ -166,6 +166,31 @@ class TestMaterials(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertTrue(material.sticker_group_node(mat).inputs["Emission Mask"].is_linked)
 
+    def test_glitter_flake_texture(self):
+        from cs_sticker.library.catalog import Sticker
+        tex = os.path.join(utils.CORE_LIBRARY_DIR, "textures")
+        textures = {
+            "base": os.path.join(tex, "demo_glitter_heart_color.png"),
+            "glitter": os.path.join(tex, "demo_glitter_heart_glitter.png"),
+        }
+        mat, _ = material.build_material(Sticker(id="g1", name="G1", collection="X", finish="GLITTER",
+                                                 textures=dict(textures)))
+        grp = material.sticker_group_node(mat)
+        self.assertFalse(grp.inputs["Flake Normal"].is_linked)
+        self.assertEqual(grp.inputs["Use Flake Texture"].default_value, 0.0)
+
+        textures["flakes"] = os.path.join(tex, "demo_foil_shield_normal.png")
+        mat, warnings = material.build_material(Sticker(id="g2", name="G2", collection="X", finish="GLITTER",
+                                                        textures=textures))
+        self.assertEqual(warnings, [])
+        grp = material.sticker_group_node(mat)
+        self.assertTrue(grp.inputs["Flake Normal"].is_linked)
+        self.assertEqual(grp.inputs["Use Flake Texture"].default_value, 1.0)
+        node = grp.inputs["Flake Normal"].links[0].from_node
+        self.assertEqual(node.extension, "REPEAT")
+        self.assertEqual(node.image.colorspace_settings.name, "Non-Color")
+        self.assertTrue(node.inputs["Vector"].is_linked)
+
     def test_wear_mask_wiring(self):
         from cs_sticker.library.catalog import Sticker
         tex = os.path.join(utils.CORE_LIBRARY_DIR, "textures")

@@ -22,6 +22,10 @@ STEEP_FROM, STEEP_TO = 0.08, 0.2
 # missed the target (the sticker would float), 0 on the surface.
 UNPROJECTED_ATTRIBUTE = "cs_unprojected"
 
+# UV repeats of the CS2 flake normal across a sticker (estimate, not taken
+# from the shader).
+FLAKE_TILING = 8.0
+
 MISSING_IMAGE_NAME = "CS2 Missing Texture"
 MAT_PREFIX = "CS2 "
 
@@ -202,6 +206,8 @@ def build_material(sticker, unique=True):
         glit = tex_node(F.ROLE_GLITTER, -300)
         if glit:
             wire(glit.outputs["Color"], "Glitter Mask")
+    if finish == "GLITTER" and F.ROLE_FLAKES in sticker.textures:
+        _wire_flakes(nodes, links, tex_node, wire, grp)
 
     if finish == "HOLO" or (finish == "LENTICULAR" and not lenticular_strip):
         _wire_holo(sticker, nodes, links, tex_node, wire)
@@ -209,6 +215,25 @@ def build_material(sticker, unique=True):
     _apply_params(sticker, grp)
     mat.diffuse_color = (0.8, 0.8, 0.8, 1.0)
     return mat, warnings
+
+
+def _wire_flakes(nodes, links, tex_node, wire, grp):
+    """Tiled CS2 flake normal -> Flake Normal (procedural flakes otherwise)."""
+    coord = nodes.new("ShaderNodeTexCoord")
+    coord.location = (-950, -900)
+    tiling = nodes.new("ShaderNodeMapping")
+    tiling.label = "Flake Tiling"
+    tiling.location = (-750, -900)
+    tiling.inputs["Scale"].default_value = (FLAKE_TILING,) * 3
+    links.new(coord.outputs["UV"], tiling.inputs["Vector"])
+    flakes = tex_node(F.ROLE_FLAKES, -900, tiling.outputs["Vector"])
+    if flakes is None:
+        nodes.remove(tiling)
+        nodes.remove(coord)
+        return
+    flakes.extension = "REPEAT"
+    wire(flakes.outputs["Color"], "Flake Normal")
+    _set_input(grp, "Use Flake Texture", 1.0)
 
 
 def _wire_holo(sticker, nodes, links, tex_node, wire):

@@ -11,7 +11,8 @@ single group serves every sticker of that finish. The material builder
 Shading model (approximating csgo_sticker.vfx):
 
 * Paper        matte print, light clear coat option
-* Glitter      voronoi micro-flakes perturb the normal, metallic in mask
+* Glitter      micro-flakes perturb the normal, metallic in mask. Flakes come
+               from the CS2 flake normal texture when wired, else voronoi
 * Holo         mask R = strength, G/B = spectrum offset, A = multiplier;
                spectrum lookup shifts with view angle ("tilt")
 * Foil         metallic where mask, embossed via normal map
@@ -31,7 +32,7 @@ from .builder import GroupBuilder, principled, set_bsdf
 
 # Bump when group contents change; outdated groups are replaced (old ones
 # are renamed, so existing materials keep working until re-spawned).
-GROUP_VERSION = 4
+GROUP_VERSION = 5
 VERSION_KEY = "cs_sticker_version"
 
 PREFIX = "CS2 "
@@ -263,6 +264,10 @@ def _build_glitter(tree):
     gmetal = b.input("Glitter Metallic", default=0.9, lo=0.0, hi=1.0, factor=True)
     grough = b.input("Glitter Roughness", default=0.2, lo=0.0, hi=1.0, factor=True)
     rough = b.input("Roughness", default=0.5, lo=0.0, hi=1.0, factor=True)
+    flake_col = b.input("Flake Normal", "COLOR", default=FLAT_NORMAL,
+                        description="Tiled CS2 flake normal (squares_glitter_normal)")
+    use_tex = b.input("Use Flake Texture", default=0.0, lo=0.0, hi=1.0, factor=True,
+                      description="1 = flakes from Flake Normal, 0 = procedural voronoi flakes")
     wear = _wear_inputs(b)
 
     coord = b.node("ShaderNodeTexCoord", x=-900, y=-200)
@@ -273,6 +278,11 @@ def _build_glitter(tree):
     flake = b.vmath("MULTIPLY_ADD", (vor, "Color"), (2.0, 2.0, 2.0), x=-500, y=-200)
     flake.node.inputs[2].default_value = (-1.0, -1.0, -1.0)
     flake = b.vmath("SCALE", flake, x=-300, y=-200, scale=gstr)
+    # Texture flakes: tilt = flake normal minus the unperturbed normal.
+    geo = b.node("ShaderNodeNewGeometry", x=-500, y=-650)
+    tex_flake = b.vmath("SUBTRACT", _normal_map(b, flake_col, gstr, x=-500, y=-800),
+                        (geo, "Normal"), x=-300, y=-700)
+    flake = b.mix("VECTOR", use_tex, flake, tex_flake, x=-100, y=-150)
     nrm = _normal_map(b, ncol, nstr, x=-300, y=-450)
     tilted = b.vmath("NORMALIZE", b.vmath("ADD", nrm, flake, x=-100, y=-300), x=50, y=-300)
     normal = b.mix("VECTOR", mask, nrm, tilted, x=250, y=-300)

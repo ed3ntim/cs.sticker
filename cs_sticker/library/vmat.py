@@ -27,6 +27,7 @@ _PAIR_RE = re.compile(
 _ROLE_KEYWORDS = (
     (F.ROLE_WEARMASK, ("wearmask", "wear_mask")),
     (F.ROLE_SCRATCHES, ("stickerscratches", "scratches")),
+    (F.ROLE_FLAKES, ("glitternormal",)),
     (F.ROLE_HOLOSPECTRUM, ("holospectrum", "holo_spectrum", "spectrum", "holowarp", "holo_warp", "warp")),
     (F.ROLE_HOLOMASK, ("holomask", "holo_mask", "holo")),
     (F.ROLE_GLITTER, ("glittermask", "glitter_mask", "glitter", "sparkle")),
@@ -36,9 +37,8 @@ _ROLE_KEYWORDS = (
     (F.ROLE_BASE, ("color", "colour", "albedo", "basecolor", "base", "diffuse")),
 )
 
-# Keys that look like a role but are something else (glitter flake normals,
-# backing AO).
-_IGNORED_KEY_WORDS = ("glitternormal", "ambientocclusion", "backing")
+# Keys that look like a role but are something else (backing AO).
+_IGNORED_KEY_WORDS = ("ambientocclusion", "backing")
 
 # Shared by all sticker layers, so it has no "Sticker0" suffix.
 _LAYER_INDEPENDENT_ROLES = (F.ROLE_SCRATCHES,)
@@ -114,12 +114,12 @@ class VmatInfo:
 
 def _is_default_texture(value, role):
     """Engine defaults (flat normal, default masks) carry no sticker data.
-    The default holo spectrum and scratches are the exception: stickers use
-    them as they are."""
+    The default holo spectrum, scratches and glitter flakes are the
+    exception: stickers use them as they are."""
     low = value.replace("\\", "/").lower()
     if not low.startswith("materials/default/"):
         return False
-    return role not in (F.ROLE_HOLOSPECTRUM, F.ROLE_SCRATCHES)
+    return role not in (F.ROLE_HOLOSPECTRUM, F.ROLE_SCRATCHES, F.ROLE_FLAKES)
 
 
 def parse_vmat_text(text, path=""):
@@ -161,6 +161,9 @@ def parse_vmat_text(text, path=""):
     if _flag(info, "g_bSelfIllumSticker0") and F.ROLE_NORMAL in info.textures:
         info.textures[F.ROLE_EMISSION] = info.textures.pop(F.ROLE_NORMAL)
     info.finish = _finish_from_params(info)
+    # Every CS2 sticker references the flake normal, only glitter shows it.
+    if info.finish != "GLITTER":
+        info.textures.pop(F.ROLE_FLAKES, None)
     return info
 
 
