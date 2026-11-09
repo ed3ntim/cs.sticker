@@ -20,6 +20,9 @@ BUNDLED_LIBRARY_DIR = os.path.join(ADDON_DIR, "stickers", "bundled")
 PROP_STICKER_ID = "cs_sticker_id"
 PROP_STICKER_FINISH = "cs_sticker_finish"
 PROP_COLLECTION = "cs_sticker_collection"  # on the per-scene sticker collections
+# In-material stickers (nodes/decal.py): the projector Empty holds its
+# decal node group here.
+PROP_DECAL_GROUP = "cs_sticker_decal_group"
 
 # Name of the material node that hosts the finish node group.
 STICKER_NODE_NAME = "CS2_STICKER"
@@ -46,6 +49,11 @@ def user_library_dir():
 
 def is_sticker(obj):
     return obj is not None and PROP_STICKER_ID in obj
+
+
+def is_decal(obj):
+    """Sticker drawn in the material of another mesh (projector Empty)."""
+    return is_sticker(obj) and obj.get(PROP_DECAL_GROUP) is not None
 
 
 def sticker_collection(context):

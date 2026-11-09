@@ -9,6 +9,7 @@ import bpy
 from .. import utils
 from ..library import finishes as F
 from ..library import registry
+from ..nodes import decal as D
 from ..nodes import material as M
 from ..ops import placement as P
 
@@ -107,6 +108,8 @@ class CSSTICKER_PT_place(_Base, bpy.types.Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         target = P.pick_target(context)
+        in_material = settings.method == "MATERIAL"
+        layout.prop(settings, "method", expand=True)
         layout.prop(settings, "size_mode", expand=True)
         col = layout.column(align=True)
         if settings.size_mode == "RELATIVE":
@@ -118,12 +121,16 @@ class CSSTICKER_PT_place(_Base, bpy.types.Panel):
             col.prop(settings, "size")
         col.prop(settings, "rotation")
         col = layout.column(align=True)
-        col.prop(settings, "subdiv_levels")
-        col.prop(settings, "offset_factor")
+        mesh_only = col.column(align=True)
+        mesh_only.active = not in_material
+        mesh_only.prop(settings, "subdiv_levels")
+        mesh_only.prop(settings, "offset_factor")
         col.prop(settings, "project_limit")
         layout.prop(settings, "attach")
         layout.prop(settings, "align_up")
-        layout.prop(settings, "unique_material")
+        row = layout.row()
+        row.active = not in_material
+        row.prop(settings, "unique_material")
         row = layout.row()
         row.alignment = "RIGHT"
         row.operator("cs_sticker.reset_placement", icon="LOOP_BACK")
@@ -137,11 +144,22 @@ class CSSTICKER_PT_place(_Base, bpy.types.Panel):
         sub = col.row(align=True)
         sub.enabled = target is not None
         sub.operator("cs_sticker.spawn", text="Spawn Sticker", icon="SNAP_FACE").mode = "SURFACE"
-        col.operator("cs_sticker.spawn", text="Manual (at Cursor)", icon="MESH_PLANE").mode = "MANUAL"
+        sub = col.row(align=True)
+        sub.enabled = target is not None or not in_material
+        sub.operator("cs_sticker.spawn", text="Manual (at Cursor)",
+                     icon="CUBE" if in_material else "MESH_PLANE").mode = "MANUAL"
         if target is None:
             layout.label(text="Select a mesh to snap onto", icon="INFO")
         else:
             layout.label(text=f"Target: {target.name}", icon="OBJECT_DATA")
+            if in_material:
+                mats = D.target_materials(target, create=False)
+                shared = [m.name for m in mats if m.users > 1]
+                if not mats:
+                    layout.label(text="No material yet, one will be added", icon="INFO")
+                elif shared:
+                    layout.label(text=f"Shared material: {shared[0]}", icon="ERROR")
+                    layout.label(text="Meshes using it show the sticker inside the box too")
 
 
 class CSSTICKER_PT_active(_Base, bpy.types.Panel):
@@ -164,6 +182,10 @@ class CSSTICKER_PT_active(_Base, bpy.types.Panel):
         row.operator("cs_sticker.rotate", text="90°").angle = math.radians(90)
         layout.prop(obj, "scale", text="Scale")
 
+        if utils.is_decal(obj):
+            self._draw_decal(context, obj)
+            return
+
         col = layout.column(align=True)
         sub = obj.modifiers.get(P.MOD_SUBDIV)
         sw = obj.modifiers.get(P.MOD_SHRINKWRAP)
@@ -177,21 +199,43 @@ class CSSTICKER_PT_active(_Base, bpy.types.Panel):
         row.operator("cs_sticker.retarget", icon="SNAP_FACE")
         row.operator("cs_sticker.make_unique", icon="DUPLICATE")
 
-        grp = M.sticker_group_node(obj.active_material)
-        if grp is None:
-            return
-        box = layout.box()
-        box.label(text=grp.label or "Material", icon="NODE_MATERIAL")
-        col = box.column(align=True)
-        col.use_property_split = True
-        col.use_property_decorate = False
-        for sock in grp.inputs:
-            # Only plain values the user can tweak; texture-driven ones are linked.
-            if sock.is_linked or not hasattr(sock, "default_value") or sock.type == "SHADER":
-                continue
-            if sock.name in ("Normal Color", "Holo Mask", "Use Wear Mask", "Scratches", "Wear Mask"):
-                continue
-            col.prop(sock, "default_value", text=sock.name)
+        _draw_group_inputs(layout, M.sticker_group_node(obj.active_material))
+
+    def _draw_decal(self, context, obj):
+        layout = self.layout
+        tree = P.decal_group(obj)
+        mats = D.materials_with(tree) if tree is not None else []
+        col = layout.column(align=True)
+        if mats:
+            for mat in mats:
+                col.label(text=f"In material: {mat.name}", icon="MATERIAL")
+        else:
+            col.label(text="In no material, retarget it to a mesh", icon="ERROR")
+        row = layout.row(align=True)
+        row.operator("cs_sticker.retarget", icon="SNAP_FACE")
+        row.operator("cs_sticker.remove_decal", icon="TRASH")
+        _draw_group_inputs(layout, D.sticker_group_node(tree))
+
+
+HIDDEN_INPUTS = ("Normal Color", "Holo Mask", "Use Wear Mask", "Scratches", "Wear Mask")
+
+
+def _draw_group_inputs(layout, grp):
+    """Tweakable values of a sticker's finish group."""
+    if grp is None:
+        return
+    box = layout.box()
+    box.label(text=grp.label or "Material", icon="NODE_MATERIAL")
+    col = box.column(align=True)
+    col.use_property_split = True
+    col.use_property_decorate = False
+    for sock in grp.inputs:
+        # Only plain values the user can tweak; texture-driven ones are linked.
+        if sock.is_linked or not hasattr(sock, "default_value") or sock.type == "SHADER":
+            continue
+        if sock.name in HIDDEN_INPUTS or sock.name.startswith("Decal") or sock.type == "VECTOR":
+            continue
+        col.prop(sock, "default_value", text=sock.name)
 
 
 classes = (

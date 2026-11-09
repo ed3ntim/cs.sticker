@@ -6,7 +6,7 @@ are created on demand in bpy.data when a sticker is spawned."""
 if "groups" in locals():
     import importlib
 
-    for _mod in (builder, groups, material):  # noqa: F821
+    for _mod in (builder, groups, material, decal):  # noqa: F821
         importlib.reload(_mod)
 
-from . import builder, groups, material  # noqa: E402
+from . import builder, groups, material, decal  # noqa: E402

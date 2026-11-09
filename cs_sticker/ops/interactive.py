@@ -153,8 +153,18 @@ class CSSTICKER_OT_place_interactive(bpy.types.Operator):
     def _place(self, context):
         obj = self.ghost
         target = self.hit[0]
+        settings = context.scene.cs_sticker_place
+        if settings.method == "MATERIAL":
+            # The mesh ghost was only the preview: same spot and size, but
+            # drawn into the target's material.
+            loc, rot, scale = obj.matrix_world.decompose()
+            width = self.base_size * scale.x
+            _remove_object(obj)
+            obj, warnings = P.create_decal_object(context, self.sticker, settings, target,
+                                                  Matrix.LocRotScale(loc, rot, None), width)
+            self.warnings += warnings
         obj.hide_select = False
-        P.attach(obj, target, context.scene.cs_sticker_place.attach)
+        P.attach(obj, target, settings.attach)
         self.placed.append(obj)
         self.ghost = None
 

@@ -18,8 +18,10 @@ classes = spawn.classes + interactive.classes + library_ops.classes + sticker_op
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    sticker_ops.register()
 
 
 def unregister():
+    sticker_ops.unregister()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

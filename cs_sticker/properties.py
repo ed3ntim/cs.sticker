@@ -89,7 +89,16 @@ SIZE_MODE_ITEMS = [
 ]
 
 
+METHOD_ITEMS = [
+    ("MESH", "Mesh", "Own sticker mesh, projected onto the surface (Shrinkwrap)"),
+    ("MATERIAL", "In Material", "Draw the sticker into the target's material through a "
+                                "projector Empty, no extra geometry"),
+]
+
+
 class CSSTICKER_PG_placement(bpy.types.PropertyGroup):
+    method: EnumProperty(name="Method", items=METHOD_ITEMS, default="MESH",
+                         description="How spawned stickers are built")
     size_mode: EnumProperty(name="Size Mode", items=SIZE_MODE_ITEMS, default="RELATIVE")
     size_relative: FloatProperty(
         name="Size", description="Sticker width as a percentage of the target's longest side. "
@@ -116,7 +125,9 @@ class CSSTICKER_PG_placement(bpy.types.PropertyGroup):
     )
     project_limit: FloatProperty(
         name="Project Limit", description="Maximum projection distance as a factor of the sticker size "
-                                          "(stops stickers wrapping onto far-away faces). 0 = unlimited",
+                                          "(stops stickers wrapping onto far-away faces). 0 = unlimited. "
+                                          "In Material: depth of the projection box above and below "
+                                          "the surface",
         default=0.5, min=0.0, soft_max=4.0,
     )
     attach: EnumProperty(name="Attach", items=ATTACH_ITEMS, default="PARENT")

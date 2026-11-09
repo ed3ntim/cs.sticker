@@ -23,7 +23,15 @@ Shading model (approximating csgo_sticker.vfx):
                strip picked by view angle. Lens coat with ridges
 * Embroidered  rough fabric with sheen and stitched thread relief
 
-Every finish group exposes the wear inputs (see _build_wear) and Alpha Clip.
+Every finish group exposes the wear inputs (see _build_wear) and Alpha Clip,
+and outputs Shader plus the final Alpha.
+
+In-material stickers (decal.py) wire the optional "Decal Tangent" and
+"Decal UV" inputs: the target mesh has no sticker UV, so normal maps,
+view-angle effects and procedural patterns use the projector's frame
+instead of the mesh's UV and tangents. The BSDF then stays opaque and the
+caller mixes it over the target shader by the Alpha output. Unlinked
+(zero tangent) the groups behave exactly as before.
 """
 
 import bpy
@@ -32,7 +40,7 @@ from .builder import GroupBuilder, principled, set_bsdf
 
 # Bump when group contents change; outdated groups are replaced (old ones
 # are renamed, so existing materials keep working until re-spawned).
-GROUP_VERSION = 5
+GROUP_VERSION = 6
 VERSION_KEY = "cs_sticker_version"
 
 PREFIX = "CS2 "
@@ -80,13 +88,16 @@ def _build_wear(tree):
     alpha = b.input("Alpha", default=1.0, lo=0.0, hi=1.0, factor=True)
     s = _wear_sockets(b)
     clip, wear, scale, seed = s["Alpha Clip"], s["Wear"], s["Wear Scale"], s["Wear Seed"]
+    decal_uv = b.input("Decal UV", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True)
+    decal_mode = b.input("Decal Mode", default=0.0, lo=0.0, hi=1.0, factor=True)
     out_alpha = b.output("Alpha", "FLOAT")
     out_intact = b.output("Intact", "FLOAT")
 
     b.column(-900)
     coord = b.node("ShaderNodeTexCoord", y=200)
     noise = b.node("ShaderNodeTexNoise", x=-700, y=200, noise_dimensions="4D")
-    b.link((coord, "UV"), (noise, "Vector"))
+    b.links.new(b.mix("VECTOR", decal_mode, (coord, "UV"), decal_uv, x=-850, y=350),
+                noise.inputs["Vector"])
     b.set_or_link(noise, "Scale", scale)
     b.set_or_link(noise, "W", seed)
     b.set_or_link(noise, "Detail", 6.0)
@@ -137,17 +148,18 @@ def _build_holo_coords(tree):
                             description="How fast the spectrum shifts with viewing angle")
     scale = b.input("Spectrum Scale", default=1.0, lo=-100.0, hi=100.0)
     offset = b.input("Spectrum Offset", default=0.0)
+    decal_tangent = b.input("Decal Tangent", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True)
     out = b.output("Vector", "VECTOR")
 
     b.column(-900)
     geo = b.node("ShaderNodeNewGeometry", y=200)
-    tangent = b.node("ShaderNodeTangent", y=-50, direction_type="UV_MAP")
+    tangent = _tangent(b, decal_tangent, x=-900, y=-50)
     _, g, bl = b.separate_color(mask, x=-900, y=-300)
 
     b.column(-650)
     facing = b.math("SUBTRACT", 1.0, b.vmath("DOT_PRODUCT", (geo, "Normal"), (geo, "Incoming"), y=250),
                     x=-450, y=250)
-    side = b.vmath("DOT_PRODUCT", (geo, "Incoming"), (tangent, "Tangent"), y=0)
+    side = b.vmath("DOT_PRODUCT", (geo, "Incoming"), tangent, y=0)
     b.column(-250)
     tilt = b.math("ADD", b.math("MULTIPLY", side, 0.5, y=0), b.math("MULTIPLY", facing, 0.5, y=200), x=-100)
     tilt = b.math("MULTIPLY", tilt, tilt_strength, x=50)
@@ -186,19 +198,23 @@ def _build_lenticular_coords(tree):
                    description="How quickly frames change with viewing angle")
     offset = b.input("Frame Offset", default=0.0, lo=-1.0, hi=1.0,
                      description="Shifts which frame is visible head-on")
+    decal_tangent = b.input("Decal Tangent", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True)
+    decal_uv = b.input("Decal UV", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True)
     out = b.output("Vector", "VECTOR")
 
     b.column(-900)
     coord = b.node("ShaderNodeTexCoord", y=250)
     geo = b.node("ShaderNodeNewGeometry", y=0)
-    tangent = b.node("ShaderNodeTangent", y=-250, direction_type="UV_MAP")
-    side = b.vmath("DOT_PRODUCT", (geo, "Incoming"), (tangent, "Tangent"), x=-650, y=0)
+    tangent = _tangent(b, decal_tangent, x=-900, y=-250)
+    side = b.vmath("DOT_PRODUCT", (geo, "Incoming"), tangent, x=-650, y=0)
     # t in [0, 1): 0.5 head-on, sensitivity spreads it around the center.
     t = b.math("MULTIPLY_ADD", side, b.math("MULTIPLY", sens, 0.5, x=-650, y=-200), x=-450)
     b.links.new(b.math("ADD", offset, 0.5, x=-650, y=-350), t.node.inputs[2])
     t = b.math("MINIMUM", b.math("MAXIMUM", t, 0.0, x=-300), 0.9999, x=-150)
     idx = b.math("FLOOR", b.math("MULTIPLY", t, frames, x=0), x=150)
-    u, v, _ = b.separate((coord, "UV"), x=150, y=250)
+    uv = b.mix("VECTOR", _decal_use(b, decal_tangent, x=-900, y=450), (coord, "UV"), decal_uv,
+               x=0, y=400)
+    u, v, _ = b.separate(uv, x=150, y=250)
     u = b.math("DIVIDE", b.math("ADD", u, idx, x=300), frames, x=450)
     b.links.new(b.combine(u, v, 0.0, x=650), out)
 
@@ -215,25 +231,81 @@ def _common_inputs(b, normal_strength=1.0):
     return base, alpha, ncol, nstr
 
 
+def _decal_use(b, decal_tangent, x=-900, y=0):
+    """1 when a decal frame is wired (non-zero tangent), else 0."""
+    length = b.vmath("LENGTH", decal_tangent, x=x, y=y)
+    return b.math("GREATER_THAN", length, 1e-6, x=x + 150, y=y)
+
+
+def _tangent(b, decal_tangent, x=-900, y=0):
+    """UV tangent of the mesh, or the decal tangent when one is wired."""
+    uv_tangent = b.node("ShaderNodeTangent", x, y, direction_type="UV_MAP")
+    return b.mix("VECTOR", _decal_use(b, decal_tangent, x=x, y=y - 150), (uv_tangent, "Tangent"),
+                 decal_tangent, x=x + 300, y=y)
+
+
 def _wear_inputs(b):
-    return _wear_sockets(b)
+    """Wear inputs, then the optional decal frame (kept last in the UI)."""
+    sockets = _wear_sockets(b)
+    tangent = b.input("Decal Tangent", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True,
+                      description="In-material stickers: world direction of the sticker's +U")
+    uv = b.input("Decal UV", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True,
+                 description="In-material stickers: sticker UV from the projector")
+    b.decal = (tangent, uv, _decal_use(b, tangent, x=-1000, y=-1300))
+    return sockets
+
+
+def _pattern_uv(b, coord, x=-800, y=0):
+    """UV for procedural patterns: mesh UV, or the decal UV when wired."""
+    _, uv, use = b.decal
+    return b.mix("VECTOR", use, (coord, "UV"), uv, x=x, y=y)
 
 
 def _normal_map(b, ncol, nstr, x=-300, y=-450):
+    """Tangent-space normal map. With a decal frame the tangent space is
+    built from the surface normal and the decal tangent instead of the
+    mesh's UV (the target mesh's UV has nothing to do with the sticker)."""
     nm = b.node("ShaderNodeNormalMap", x, y)
     b.set_or_link(nm, "Color", ncol)
     b.set_or_link(nm, "Strength", nstr)
-    return nm.outputs["Normal"]
+    decal = getattr(b, "decal", None)
+    if decal is None:
+        return nm.outputs["Normal"]
+    tangent, _, use = decal
+    geo = b.node("ShaderNodeNewGeometry", x - 700, y - 250)
+    n = (geo, "Normal")
+    d = b.vmath("DOT_PRODUCT", n, tangent, x=x - 550, y=y - 250)
+    t = b.vmath("NORMALIZE", b.vmath("SUBTRACT", tangent, b.vmath("SCALE", n, x=x - 450, y=y - 350, scale=d),
+                                     x=x - 350, y=y - 250), x=x - 250, y=y - 250)
+    bt = b.vmath("CROSS_PRODUCT", n, t, x=x - 150, y=y - 300)
+    c = b.vmath("MULTIPLY_ADD", ncol, (2.0, 2.0, 2.0), x=x - 550, y=y - 450)
+    c.node.inputs[2].default_value = (-1.0, -1.0, -1.0)
+    cx, cy, cz = b.separate(c, x=x - 400, y=y - 450)
+    v = b.vmath("ADD", b.vmath("SCALE", t, x=x - 250, y=y - 400, scale=cx),
+                b.vmath("SCALE", bt, x=x - 250, y=y - 450, scale=cy), x=x - 100, y=y - 400)
+    v = b.vmath("ADD", v, b.vmath("SCALE", n, x=x - 250, y=y - 500, scale=cz), x=x, y=y - 400)
+    v = b.vmath("NORMALIZE", v, x=x + 100, y=y - 400)
+    # Strength like the Normal Map node: blend from the surface normal.
+    v = b.vmath("ADD", b.vmath("SCALE", b.vmath("SUBTRACT", v, n, x=x + 200, y=y - 400), x=x + 300, y=y - 400,
+                               scale=nstr), n, x=x + 400, y=y - 400)
+    v = b.vmath("NORMALIZE", v, x=x + 500, y=y - 400)
+    return b.mix("VECTOR", use, nm.outputs["Normal"], v, x=x + 600, y=y - 300)
 
 
 def _wear_alpha(b, alpha, wear, x=200, y=-700):
-    node = b.subgroup(ensure_group("WEAR"), dict(wear, Alpha=alpha), x=x, y=y)
-    return node.outputs["Alpha"], node.outputs["Intact"]
+    """Worn, clipped alpha. Returns (BSDF alpha, intact): with a decal frame
+    the BSDF stays opaque and the Alpha output carries the coverage."""
+    _, uv, use = b.decal
+    node = b.subgroup(ensure_group("WEAR"), dict(wear, Alpha=alpha, **{"Decal UV": uv, "Decal Mode": use}),
+                      x=x, y=y)
+    b.alpha = node.outputs["Alpha"]
+    return b.math("MAXIMUM", node.outputs["Alpha"], use, x=x + 200, y=y), node.outputs["Intact"]
 
 
 def _finish(b, bsdf):
     out = b.output("Shader")
     b.links.new(bsdf.outputs[0], out)
+    b.links.new(b.alpha, b.output("Alpha", "FLOAT"))
 
 
 def _build_paper(tree):
@@ -272,7 +344,7 @@ def _build_glitter(tree):
 
     coord = b.node("ShaderNodeTexCoord", x=-900, y=-200)
     vor = b.node("ShaderNodeTexVoronoi", x=-700, y=-200, feature="F1")
-    b.link((coord, "UV"), (vor, "Vector"))
+    b.links.new(_pattern_uv(b, coord, x=-800, y=-100), vor.inputs["Vector"])
     b.set_or_link(vor, "Scale", gscale)
     # Random per-flake color -> random tilt in [-1, 1] * strength.
     flake = b.vmath("MULTIPLY_ADD", (vor, "Color"), (2.0, 2.0, 2.0), x=-500, y=-200)
@@ -388,7 +460,7 @@ def _build_lenticular(tree):
 
     coord = b.node("ShaderNodeTexCoord", x=-900, y=-600)
     wave = b.node("ShaderNodeTexWave", x=-700, y=-600, wave_type="BANDS", bands_direction="X")
-    b.link((coord, "UV"), (wave, "Vector"))
+    b.links.new(_pattern_uv(b, coord, x=-800, y=-500), wave.inputs["Vector"])
     b.set_or_link(wave, "Scale", density)
     nrm = _normal_map(b, ncol, nstr)
     bump = b.node("ShaderNodeBump", x=-100, y=-600)
@@ -419,7 +491,7 @@ def _build_embroidered(tree):
     coord = b.node("ShaderNodeTexCoord", x=-900, y=-600)
     wave = b.node("ShaderNodeTexWave", x=-700, y=-600, wave_type="BANDS",
                   bands_direction="DIAGONAL", wave_profile="SIN")
-    b.link((coord, "UV"), (wave, "Vector"))
+    b.links.new(_pattern_uv(b, coord, x=-800, y=-500), wave.inputs["Vector"])
     b.set_or_link(wave, "Scale", density)
     b.set_or_link(wave, "Distortion", 2.0)
     b.set_or_link(wave, "Detail", 3.0)

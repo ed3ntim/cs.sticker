@@ -16,6 +16,10 @@ Target: Blender 5.2, compatible back to 4.5.
    and pick the zip (drag & drop onto the Blender window works too).
 3. 3D Viewport sidebar (`N`), tab **cs.sticker**.
 
+To remove the add-on: *Preferences > Add-ons > cs.sticker > Uninstall
+cs.sticker* (or Blender's own *⌄ > Uninstall* next to the extension).
+Stickers already placed in your files stay as they are.
+
 The add-on ships with one demo sticker per finish. To use the real CS2
 stickers, export them from your own game installation (see
 [CS2 stickers](#cs2-stickers)).
@@ -24,7 +28,9 @@ stickers, export them from your own game installation (see
 
 1. **Library**: search by name, collection, finish or tag; filter by
    collection and finish. **Preview** shows the texture and its maps.
-2. **Placement** (size, rotation, subdivisions, offset, attach mode).
+2. **Placement** (method, size, rotation, subdivisions, offset, attach mode).
+   *Method*: **Mesh** (own sticker mesh, default) or **In Material** (see
+   [In Material](#in-material-20)).
    Size is relative by default: 6.5 % of the target's longest side, which
    matches CS2 stickers on rifles in any scene scale (meters or Source
    units). Switch to *Absolute* for a fixed width. The offset is a
@@ -46,6 +52,28 @@ like a decal: the plane hovers slightly above the surface and is projected
 inward, so it lands on the outermost surface (over plates and levers, not
 under them). Parts that would hang past the edge of the target are hidden,
 as are the steep walls of steps the sticker is pulled over.
+
+### In Material (2.0)
+
+*Placement > Method > In Material* draws the sticker into the material of
+the target mesh instead of adding a sticker mesh, like CS2 does on weapons.
+The sticker is carried by a projector (an Empty shown as a box): move,
+rotate or scale it and the sticker follows live. Its depth is the
+*Project Limit*. The target needs no UV map for the sticker; a mesh without
+material gets a plain one.
+
+- Every material of the target gets one node group per sticker
+  (`CS2 Decal <name>`) between its shader and the Material Output. Several
+  stickers stack.
+- Faces turned away from the projector stay clean, so the sticker does not
+  show through on the back of thin parts.
+- A shared material shows the sticker on every mesh that uses it, where
+  that mesh lies inside the projector box.
+- *Active Sticker > Remove Sticker* (or deleting the Empty) takes the nodes
+  out of the materials again. A duplicated projector gets its own copy.
+- Unlike sticker meshes, the projection cannot tell an outer surface from
+  one below it inside the box: on stacked parts of the same mesh (a lever
+  over a plate) both get the sticker. Keep the box shallow there.
 
 ## CS2 stickers
 

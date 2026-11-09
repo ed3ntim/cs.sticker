@@ -101,24 +101,38 @@ def build_material(sticker, unique=True):
         mat.use_nodes = True  # always on (and deprecated) in Blender 5.x
     _configure_material(mat)
     tree = mat.node_tree
-    nodes, links = tree.nodes, tree.links
-    nodes.clear()
+    tree.nodes.clear()
 
-    finish = sticker.finish if sticker.finish in groups.FINISH_GROUP_KEYS else F.DEFAULT_FINISH
-    out = nodes.new("ShaderNodeOutputMaterial")
+    out = tree.nodes.new("ShaderNodeOutputMaterial")
     out.location = (500, 0)
+    grp = add_sticker_nodes(tree, sticker, warnings, mask=_steep_face_cutoff)
+    tree.links.new(grp.outputs["Shader"], out.inputs["Surface"])
+    mat.diffuse_color = (0.8, 0.8, 0.8, 1.0)
+    return mat, warnings
+
+
+def add_sticker_nodes(tree, sticker, warnings, mask=None, vector=None, tangent=None, origin=(0, 0)):
+    """Finish group node plus the Image Texture nodes of ``sticker`` in
+    ``tree``. Returns the group node (named utils.STICKER_NODE_NAME).
+
+    ``mask(nodes, links, alpha) -> alpha`` adds extra masking to the shape.
+    ``vector`` (sticker UV) and ``tangent`` (world +U) are given for
+    in-material stickers (decal.py): every texture samples ``vector`` and
+    the group gets the decal frame. Without them the mesh's own UV is used."""
+    nodes, links = tree.nodes, tree.links
+    ox, oy = origin
+    finish = sticker.finish if sticker.finish in groups.FINISH_GROUP_KEYS else F.DEFAULT_FINISH
     grp = nodes.new("ShaderNodeGroup")
     grp.node_tree = groups.ensure_group(finish)
     grp.name = utils.STICKER_NODE_NAME
     grp.label = f"CS2 Sticker ({F.FINISHES[finish].label})"
-    grp.location = (150, 0)
+    grp.location = (ox + 150, oy)
     grp.width = 260
-    links.new(grp.outputs["Shader"], out.inputs["Surface"])
 
     for role in F.missing_roles(finish, {r for r, p in sticker.textures.items() if p and os.path.isfile(p)}):
         warnings.append(f"{sticker.name}: required {role} texture missing for {finish.title()} finish")
 
-    def tex_node(role, y, vector=None):
+    def tex_node(role, y, vec=None):
         path = sticker.textures.get(role, "")
         img = load_image(path, data=role in F.DATA_ROLES)
         if img is None:
@@ -130,14 +144,16 @@ def build_material(sticker, unique=True):
         n = nodes.new("ShaderNodeTexImage")
         n.image = img
         n.label = role.title()
-        n.location = (-450, y)
+        n.location = (ox - 450, oy + y)
         n.interpolation = "Linear"
         if role in (F.ROLE_BASE, F.ROLE_WEARMASK):
             n.extension = "CLIP"
         else:
             n.extension = "REPEAT" if role == F.ROLE_SCRATCHES else "EXTEND"
-        if vector is not None:
-            links.new(vector, n.inputs["Vector"])
+        if vec is None:
+            vec = vector
+        if vec is not None:
+            links.new(vec, n.inputs["Vector"])
         return n
 
     def wire(src, input_name):
@@ -147,6 +163,14 @@ def build_material(sticker, unique=True):
         except KeyError:
             pass
 
+    if vector is not None:
+        wire(vector, "Decal UV")
+    if tangent is not None:
+        wire(tangent, "Decal Tangent")
+    if mask is None:
+        def mask(_nodes, _links, alpha):
+            return alpha
+
     # Lenticular without a holo mask: base and normal sample the active
     # frame of a frame strip. With a mask (CS2) it uses the holo pipeline.
     lenticular_strip = finish == "LENTICULAR" and F.ROLE_HOLOMASK not in sticker.textures
@@ -154,12 +178,16 @@ def build_material(sticker, unique=True):
     if lenticular_strip:
         coords = nodes.new("ShaderNodeGroup")
         coords.node_tree = groups.ensure_group("LENTICULAR_COORDS")
-        coords.location = (-750, 200)
+        coords.location = (ox - 750, oy + 200)
         frames = sticker.params.get("frames", 2)
         try:
             coords.inputs["Frames"].default_value = max(1.0, float(frames))
         except (TypeError, ValueError):
             warnings.append(f"{sticker.name}: invalid frames value '{frames}'")
+        if vector is not None:
+            links.new(vector, coords.inputs["Decal UV"])
+        if tangent is not None:
+            links.new(tangent, coords.inputs["Decal Tangent"])
         uv = coords.outputs["Vector"]
 
     base = tex_node(F.ROLE_BASE, 300, uv)
@@ -172,9 +200,9 @@ def build_material(sticker, unique=True):
         shape.use_clamp = True
         shape.inputs[1].default_value = 128.0
         shape.label = "Sticker Shape"
-        shape.location = (-150, 450)
+        shape.location = (ox - 150, oy + 450)
         links.new(wearmask.outputs["Color"], shape.inputs[0])
-        wire(_steep_face_cutoff(nodes, links, shape.outputs[0]), "Alpha")
+        wire(mask(nodes, links, shape.outputs[0]), "Alpha")
         # Gray value = wear order: each CS2 sticker wears its own way.
         wire(wearmask.outputs["Color"], "Wear Mask")
         _set_input(grp, "Use Wear Mask", 1.0)
@@ -182,7 +210,7 @@ def build_material(sticker, unique=True):
         if scratches:
             wire(scratches.outputs["Color"], "Scratches")
     else:
-        wire(_steep_face_cutoff(nodes, links, base.outputs["Alpha"]), "Alpha")
+        wire(mask(nodes, links, base.outputs["Alpha"]), "Alpha")
 
     normal = tex_node(F.ROLE_NORMAL, 0, uv)
     if normal:
@@ -207,40 +235,47 @@ def build_material(sticker, unique=True):
         if glit:
             wire(glit.outputs["Color"], "Glitter Mask")
     if finish == "GLITTER" and F.ROLE_FLAKES in sticker.textures:
-        _wire_flakes(nodes, links, tex_node, wire, grp)
+        _wire_flakes(nodes, links, tex_node, wire, grp, vector, (ox, oy))
 
     if finish == "HOLO" or (finish == "LENTICULAR" and not lenticular_strip):
-        _wire_holo(sticker, nodes, links, tex_node, wire)
+        _wire_holo(nodes, links, tex_node, wire, tangent, (ox, oy))
 
     _apply_params(sticker, grp)
-    mat.diffuse_color = (0.8, 0.8, 0.8, 1.0)
-    return mat, warnings
+    return grp
 
 
-def _wire_flakes(nodes, links, tex_node, wire, grp):
+def _wire_flakes(nodes, links, tex_node, wire, grp, vector=None, origin=(0, 0)):
     """Tiled CS2 flake normal -> Flake Normal (procedural flakes otherwise)."""
-    coord = nodes.new("ShaderNodeTexCoord")
-    coord.location = (-950, -900)
+    ox, oy = origin
+    coord = None
+    if vector is None:
+        coord = nodes.new("ShaderNodeTexCoord")
+        coord.location = (ox - 950, oy - 900)
+        vector = coord.outputs["UV"]
     tiling = nodes.new("ShaderNodeMapping")
     tiling.label = "Flake Tiling"
-    tiling.location = (-750, -900)
+    tiling.location = (ox - 750, oy - 900)
     tiling.inputs["Scale"].default_value = (FLAKE_TILING,) * 3
-    links.new(coord.outputs["UV"], tiling.inputs["Vector"])
+    links.new(vector, tiling.inputs["Vector"])
     flakes = tex_node(F.ROLE_FLAKES, -900, tiling.outputs["Vector"])
     if flakes is None:
         nodes.remove(tiling)
-        nodes.remove(coord)
+        if coord is not None:
+            nodes.remove(coord)
         return
     flakes.extension = "REPEAT"
     wire(flakes.outputs["Color"], "Flake Normal")
     _set_input(grp, "Use Flake Texture", 1.0)
 
 
-def _wire_holo(sticker, nodes, links, tex_node, wire):
+def _wire_holo(nodes, links, tex_node, wire, tangent=None, origin=(0, 0)):
     """holomask -> Holo Coords -> spectrum (texture or procedural) -> group."""
+    ox, oy = origin
     coords = nodes.new("ShaderNodeGroup")
     coords.node_tree = groups.ensure_group("HOLO_COORDS")
-    coords.location = (-750, -500)
+    coords.location = (ox - 750, oy - 500)
+    if tangent is not None:
+        links.new(tangent, coords.inputs["Decal Tangent"])
     mask = tex_node(F.ROLE_HOLOMASK, -300)
     if mask:
         links.new(mask.outputs["Color"], coords.inputs["Holo Mask"])
@@ -254,7 +289,7 @@ def _wire_holo(sticker, nodes, links, tex_node, wire):
     else:
         proc = nodes.new("ShaderNodeGroup")
         proc.node_tree = groups.ensure_group("HOLO_SPECTRUM")
-        proc.location = (-450, -650)
+        proc.location = (ox - 450, oy - 650)
         links.new(coords.outputs["Vector"], proc.inputs["Vector"])
         wire(proc.outputs["Color"], "Spectrum Color")
 

@@ -20,6 +20,7 @@ def _resolve_sticker(op, context):
 
 
 def report_warnings(op, warnings, limit=3):
+    warnings = list(dict.fromkeys(warnings))  # same texture warned twice
     for msg in warnings[:limit]:
         op.report({"WARNING"}, msg)
     if len(warnings) > limit:
@@ -73,25 +74,27 @@ class CSSTICKER_OT_spawn(bpy.types.Operator):
             return {"CANCELLED"}
         settings = context.scene.cs_sticker_place
         target = P.pick_target(context)
+        in_material = settings.method == "MATERIAL"
 
+        if target is None and (self.mode == "SURFACE" or in_material):
+            self.report({"ERROR"}, "Select the mesh the sticker should go on")
+            return {"CANCELLED"}
         if self.mode == "SURFACE":
-            if target is None:
-                self.report({"ERROR"}, "Select the mesh the sticker should go on")
-                return {"CANCELLED"}
             hit = P.surface_hit_from_point(context, target, context.scene.cursor.location)
             if hit is None:
                 self.report({"ERROR"}, f"'{target.name}' has no surface to place on")
                 return {"CANCELLED"}
             location, normal = hit
-            matrix = P.orientation_matrix(location, normal, settings.rotation, settings.align_up)
-            obj, warnings = P.create_sticker_object(context, sticker, settings, target, matrix)
-            P.attach(obj, target, settings.attach)
         else:
-            matrix = P.orientation_matrix(
-                context.scene.cursor.location,
-                context.scene.cursor.matrix.to_3x3() @ Vector((0, 0, 1)),
-                settings.rotation, settings.align_up)
+            location = context.scene.cursor.location.copy()
+            normal = context.scene.cursor.matrix.to_3x3() @ Vector((0, 0, 1))
+        matrix = P.orientation_matrix(location, normal, settings.rotation, settings.align_up)
+        if in_material:
+            obj, warnings = P.create_decal_object(context, sticker, settings, target, matrix)
+        else:
             obj, warnings = P.create_sticker_object(context, sticker, settings, target, matrix)
+        if target is not None and (self.mode == "SURFACE" or in_material):
+            P.attach(obj, target, settings.attach)
 
         select_only(context, obj)
         report_warnings(self, warnings)

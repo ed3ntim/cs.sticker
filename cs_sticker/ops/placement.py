@@ -226,6 +226,75 @@ def create_sticker_object(context, sticker, settings, target=None, matrix=None):
     return obj, warnings
 
 
+def decal_depth(settings, width):
+    """Half depth of the projection box: the sticker reaches this far above
+    and below the surface point. Project Limit 0 = deep (4 x width)."""
+    limit = settings.project_limit if settings.project_limit > 0 else 4.0
+    return max(limit, 0.05) * width
+
+
+def create_decal_object(context, sticker, settings, target, matrix, width=None):
+    """Sticker in the material of ``target`` ("In Material" placement): a
+    projector Empty (Cube) plus a decal node group inserted into every
+    material of the target. ``matrix`` places the projector (location and
+    rotation; scale is ignored). Returns (object, warnings)."""
+    from ..nodes import decal as D
+
+    if width is None:
+        width = sticker_width(settings, target)
+    height = width / sticker_aspect(sticker)
+    obj = bpy.data.objects.new(f"CS2 {sticker.name}", None)
+    obj.empty_display_type = "CUBE"
+    obj.empty_display_size = 1.0
+    utils.sticker_collection(context).objects.link(obj)
+    loc, rot, _ = matrix.decompose()
+    obj.matrix_world = Matrix.LocRotScale(loc, rot, Vector((width / 2.0, height / 2.0,
+                                                            decal_depth(settings, width))))
+    obj[utils.PROP_STICKER_ID] = sticker.id
+    obj[utils.PROP_STICKER_FINISH] = sticker.finish
+
+    tree, warnings = D.build_group(sticker, obj)
+    obj[utils.PROP_DECAL_GROUP] = tree
+    if target is not None:
+        D.attach(tree, target, label=f"Sticker: {sticker.name}")
+    return obj, warnings
+
+
+def decal_group(obj):
+    """Decal node group of an in-material sticker (or None)."""
+    tree = obj.get(utils.PROP_DECAL_GROUP) if obj is not None else None
+    return tree if isinstance(tree, bpy.types.NodeTree) else None
+
+
+def retarget_decal(obj, target):
+    """Move an in-material sticker into the materials of ``target``."""
+    from ..nodes import decal as D
+
+    tree = decal_group(obj)
+    if tree is None:
+        return []
+    D.detach(tree)
+    return D.attach(tree, target, label=f"Sticker: {obj.name.removeprefix('CS2 ')}")
+
+
+def decal_target(obj):
+    """Object whose materials hold the sticker: the parent if it carries the
+    decal, else the first mesh using one of its materials."""
+    from ..nodes import decal as D
+
+    tree = decal_group(obj)
+    if tree is None:
+        return None
+    mats = set(D.materials_with(tree))
+    if not mats:
+        return None
+    candidates = ([obj.parent] if obj.parent is not None else []) + list(bpy.data.objects)
+    for o in candidates:
+        if o.type == "MESH" and any(s.material in mats for s in o.material_slots):
+            return o
+    return None
+
+
 def surface_hit_from_point(context, target, point):
     """Closest point + normal on the evaluated ``target`` to a world point."""
     depsgraph = context.evaluated_depsgraph_get()
