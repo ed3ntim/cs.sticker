@@ -211,11 +211,23 @@ class TestVmat(unittest.TestCase):
         self.assertEqual(params["Foil Tint"], params["Gold Tint"])
         self.assertEqual(params["Tint Amount"], 1.0)
         self.assertAlmostEqual(params["Tint Saturation"], 0.1)
-        # Flag off or white tint: nothing to tint.
-        off = text.replace('"g_bLegacyTintMultiplySticker0"\t"1"', '"g_bLegacyTintMultiplySticker0"\t"0"')
-        self.assertNotIn("Gold Tint", V.group_params(V.parse_vmat_text(off, "a.vmat")))
+        # White or gray tint: nothing to tint.
         white = text.replace("[0.266667 0.180392 0.000000", "[1.000000 1.000000 1.000000")
         self.assertNotIn("Gold Tint", V.group_params(V.parse_vmat_text(white, "a.vmat")))
+        gray = text.replace("[0.266667 0.180392 0.000000", "[0.564706 0.564706 0.564706")
+        self.assertNotIn("Gold Tint", V.group_params(V.parse_vmat_text(gray, "a.vmat")))
+
+    def test_gold_tint_without_legacy_flag(self):
+        # Atlanta 2017 / Cologne 2016 gold (#15): plain texture, flag 0,
+        # bright tint, boost 2. Must still be tinted.
+        text = cs2_vmat('\t"g_bLegacyTintMultiplySticker0"\t"0"\n'
+                        '\t"g_vColorTintSticker0"\t"[0.976471 0.882353 0.478431 0.000000]"\n'
+                        '\t"g_flTintSaturateSticker0"\t"0.04"\n'
+                        '\t"g_flColorBoostSticker0"\t"2"\n')
+        params = V.group_params(V.parse_vmat_text(text, "astr_gold.vmat"))
+        self.assertEqual(params["Gold Tint"], [1.0, 0.9036, 0.49, 1.0])
+        self.assertEqual(params["Tint Amount"], 1.0)
+        self.assertAlmostEqual(params["Tint Saturation"], 0.04)
 
     def test_resolve_cs2_layout(self):
         with tempfile.TemporaryDirectory() as root:

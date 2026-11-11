@@ -197,14 +197,19 @@ def _legacy_tint(info):
     desaturates it (g_flTintSaturateSticker0) and multiplies a boosted tint
     (g_vColorTintSticker0 * g_flColorBoostSticker0) into it. The boost only
     brings the dark tint to full brightness, so the tint is normalized to
-    its brightest channel. Keys for both the gold and the foil group."""
-    if info.params.get("g_bLegacyTintMultiplySticker0", "0").strip() != "1":
-        return {}
+    its brightest channel. Keys for both the gold and the foil group.
+
+    Older majors (DreamHack 2014 to Atlanta 2017) do the same with
+    g_bLegacyTintMultiplySticker0 = 0 and a bright tint at a low boost, so
+    the flag is not required: any tint that is not gray after normalizing
+    counts. Gray tints (foil: 0.56 at boost 2.5) change nothing."""
     tint = _floats(info.params.get("g_vColorTintSticker0", ""))[:3]
-    if len(tint) < 3 or max(tint) <= 0 or min(tint) >= 0.999:
+    if len(tint) < 3 or max(tint) <= 0:
         return {}
     peak = max(tint)
     color = [round(min(1.0, max(0.0, v / peak)), 4) for v in tint] + [1.0]
+    if min(color[:3]) >= 0.999:
+        return {}
     sat = _floats(info.params.get("g_flTintSaturateSticker0", ""))
     return {
         "Gold Tint": color,

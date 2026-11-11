@@ -293,6 +293,51 @@ class TestMaterials(unittest.TestCase):
             self.assertLess(alpha(3, 8), 0.1)
             self.assertGreater(alpha(12, 8), 0.9)
 
+    def test_mask_background_not_zero(self):
+        """Katowice 2019 masks are 4/255 outside the shape (#14): the
+        background must still be cut out, in the material and the thumb."""
+        from cs_sticker.library import thumbs
+        from cs_sticker.library.catalog import Sticker
+        bg = 4.0 / 255.0
+        with tempfile.TemporaryDirectory() as root:
+            def png(name, fill):
+                img = bpy.data.images.new(name, 16, 16)
+                img.pixels = [v for i in range(256) for v in fill(i % 16)]
+                img.filepath_raw = os.path.join(root, name + ".png")
+                img.file_format = "PNG"
+                img.save()
+                bpy.data.images.remove(img)
+                return os.path.join(root, name + ".png")
+
+            base = png("base", lambda x: (1.0, 0.0, 0.0, 1.0))
+            mask = png("mask", lambda x: (0.8, 0.8, 0.8, 1.0) if 4 <= x < 12 else (bg, bg, bg, 1.0))
+            s = Sticker(id="kat", name="Kat", collection="X", finish="PAPER",
+                        textures={"base": base, "wearmask": mask})
+            mat, warnings = material.build_material(s)
+            self.assertEqual(warnings, [])
+            shape = next(n for n in mat.node_tree.nodes if n.label == "Sticker Shape")
+            self.assertAlmostEqual(shape.inputs[2].default_value, -bg * utils.MASK_SHAPE_GAIN, places=2)
+
+            px = thumbs.compose(s, 16)
+            self.assertLess(px[8, 1, 3], 0.01)       # outside: cut
+            self.assertGreater(px[8, 8, 3], 0.99)    # inside: kept
+
+            # Gold tint reaches the thumbnail (#15): red base turns gold.
+            gold = Sticker(id="atl", name="Atl", collection="X", finish="GOLD",
+                           textures={"base": base, "wearmask": mask},
+                           params={"Gold Tint": [1.0, 0.9036, 0.49, 1.0], "Tint Amount": 1.0,
+                                   "Tint Saturation": 0.04})
+            r, g, b = thumbs.compose(gold, 16)[8, 8, :3]
+            self.assertGreater(g / r, 0.6)
+            self.assertGreater(g, b)
+
+    def test_mask_floor(self):
+        import numpy as np
+        self.assertEqual(utils.mask_floor(np.zeros((16, 16))), 0.0)
+        self.assertAlmostEqual(utils.mask_floor(np.full((16, 16), 4 / 255)), 4 / 255)
+        # Shape reaching the corners is not a background.
+        self.assertEqual(utils.mask_floor(np.full((16, 16), 0.3)), 0.0)
+
     def test_thumbnail(self):
         from cs_sticker.library import thumbs
         holo = registry.get_catalog().get("demo_holo_rings")

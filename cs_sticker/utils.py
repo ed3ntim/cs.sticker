@@ -32,6 +32,24 @@ STICKER_COLLECTION_NAME = "CS Stickers"
 log = logging.getLogger("cs_sticker")
 
 
+# CS2 wear masks: 0 outside the shape, inside > 0. Some masks (Katowice
+# 2019, #14) have 4/255 outside instead. The shape is mask > floor + ~0.4 %.
+MASK_SHAPE_GAIN = 128.0
+MASK_FLOOR_MAX = 8.0 / 255.0
+
+
+def mask_floor(red):
+    """Background level of a wear mask: median of the four 4x4 corners of
+    the red channel (2D numpy array). Masks whose shape reaches the corners
+    have no background there, so levels above MASK_FLOOR_MAX count as 0."""
+    import numpy as np
+    k = 4
+    corners = np.concatenate([red[:k, :k].ravel(), red[:k, -k:].ravel(),
+                              red[-k:, :k].ravel(), red[-k:, -k:].ravel()])
+    floor = float(np.median(corners)) if corners.size else 0.0
+    return floor if 0.0 < floor <= MASK_FLOOR_MAX else 0.0
+
+
 def get_prefs():
     """Return the add-on preferences or None (e.g. when run from tests)."""
     addon = bpy.context.preferences.addons.get(ADDON_ID)

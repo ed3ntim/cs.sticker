@@ -23,7 +23,7 @@ from .. import utils
 from . import finishes as F
 
 SIZE = 256
-THUMB_VERSION = 1  # bump when the look changes, invalidates the cache
+THUMB_VERSION = 2  # bump when the look changes, invalidates the cache
 
 
 def cache_dir():
@@ -80,6 +80,26 @@ def _diagonal(n):
     return x, y
 
 
+# Defaults of the Foil/Gold group inputs (nodes/groups.py).
+_TINT_DEFAULTS = {"GOLD": ("Gold Tint", (1.0, 0.71, 0.29), 0.85), "FOIL": ("Foil Tint", (1.0, 1.0, 1.0), 1.0)}
+
+
+def _tinted(rgb, sticker):
+    """Foil/Gold tint as in the finish group: desaturate, multiply the tint."""
+    key, tint, amount = _TINT_DEFAULTS[sticker.finish]
+    params = sticker.params or {}
+    try:
+        tint = np.array(params.get(key, tint), dtype=np.float32)[:3]
+        sat = float(params.get("Tint Saturation", 1.0))
+        if sticker.finish == "GOLD":
+            amount = float(params.get("Tint Amount", amount))
+    except (TypeError, ValueError):
+        return rgb
+    gray = (rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))[..., None]
+    desat = gray + (rgb - gray) * sat
+    return rgb + (desat * tint - rgb) * amount
+
+
 def compose(sticker, size=SIZE):
     """RGBA float array (size, size, 4) for the sticker, rows bottom-up."""
     tex = sticker.textures
@@ -88,7 +108,11 @@ def compose(sticker, size=SIZE):
         return None
     rgb = base[..., :3].copy()
     mask = _read(tex.get(F.ROLE_WEARMASK), size, data=True)
-    alpha = np.clip(mask[..., 0] * 128.0, 0.0, 1.0) if mask is not None else base[..., 3]
+    if mask is not None:
+        floor = utils.mask_floor(mask[..., 0])
+        alpha = np.clip((mask[..., 0] - floor) * utils.MASK_SHAPE_GAIN, 0.0, 1.0)
+    else:
+        alpha = base[..., 3]
     x, y = _diagonal(size)
     finish = sticker.finish
 
@@ -111,6 +135,7 @@ def compose(sticker, size=SIZE):
     elif finish in ("FOIL", "GOLD"):
         metal = _read(tex.get(F.ROLE_METALNESS), size, data=True)
         m = metal[..., 0:1] if metal is not None else np.ones_like(rgb[..., :1])
+        rgb = rgb * (1.0 - m) + _tinted(rgb, sticker) * m
         band = np.exp(-(((x - 0.6 * y) - 0.25) / 0.16) ** 2)[..., None]
         sheen = 0.8 + 0.7 * band
         rgb = rgb * (1.0 - m) + np.clip(rgb * sheen, 0.0, 1.0) * m

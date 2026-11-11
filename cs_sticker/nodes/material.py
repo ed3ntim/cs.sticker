@@ -58,6 +58,24 @@ def load_image(path, data=False):
     return img
 
 
+MASK_FLOOR_KEY = "cs_sticker_mask_floor"
+
+
+def image_mask_floor(img):
+    """utils.mask_floor of a loaded wear mask, cached on the image."""
+    if img is None or not img.size[0] or not img.size[1]:
+        return 0.0
+    if MASK_FLOOR_KEY in img:
+        return float(img[MASK_FLOOR_KEY])
+    import numpy as np
+    w, h = img.size
+    px = np.empty(w * h * img.channels, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    floor = utils.mask_floor(px.reshape(h, w, img.channels)[..., 0])
+    img[MASK_FLOOR_KEY] = floor
+    return floor
+
+
 def image_size(path):
     """(width, height) of an image file, loading it through Blender."""
     img = load_image(path)
@@ -194,11 +212,14 @@ def add_sticker_nodes(tree, sticker, warnings, mask=None, vector=None, tangent=N
     wire(base.outputs["Color"], "Base Color")
     wearmask = tex_node(F.ROLE_WEARMASK, 600, uv) if F.ROLE_WEARMASK in sticker.textures else None
     if wearmask:
-        # CS2: shape = wear mask > ~0.8 % (inside values are small but > 0).
+        # CS2: shape = wear mask above its background (0, some masks 4/255)
+        # by ~0.4 % (inside values are small but > 0).
+        floor = image_mask_floor(wearmask.image)
         shape = nodes.new("ShaderNodeMath")
-        shape.operation = "MULTIPLY"
+        shape.operation = "MULTIPLY_ADD"
         shape.use_clamp = True
-        shape.inputs[1].default_value = 128.0
+        shape.inputs[1].default_value = utils.MASK_SHAPE_GAIN
+        shape.inputs[2].default_value = -floor * utils.MASK_SHAPE_GAIN
         shape.label = "Sticker Shape"
         shape.location = (ox - 150, oy + 450)
         links.new(wearmask.outputs["Color"], shape.inputs[0])
