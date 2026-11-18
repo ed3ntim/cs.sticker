@@ -224,6 +224,7 @@ _CS2_FLAGS = (
     ("g_bHolographicSticker0", "HOLO"),
     ("g_bGlitterSticker0", "GLITTER"),
     ("g_bMetallicSticker0", "FOIL"),
+    ("g_bFoilUsingGlitterMaskSticker0", "FOIL"),  # foil since Singapore 2026
 )
 # Finishes that only the name reveals (no dedicated shader switch).
 _NAME_ONLY = ("LENTICULAR", "EMBROIDERED", "GOLD")
@@ -239,6 +240,10 @@ def _finish_from_params(info):
     for key, finish in _CS2_FLAGS:
         if _flag(info, key):
             return finish
+    # Paper backing without a finish switch is plain paper, even with a
+    # normal map (Singapore 2026 paper stickers ship their roughness there).
+    if _flag(info, "g_bPaperBackingSticker0"):
+        return "PAPER"
     # 3) Legacy feature flags such as F_HOLO 1 / F_FOIL 1.
     for key, value in info.params.items():
         if key.upper().startswith("F_") and value.strip() not in ("0", "", "0.0"):

@@ -172,6 +172,20 @@ class TestVmat(unittest.TestCase):
         for name, flags, finish in cases:
             self.assertEqual(V.parse_vmat_text(cs2_vmat(flags, color), name).finish, finish, name)
 
+    def test_cs2_singapore2026_finishes(self):
+        # Since the Singapore 2026 update the paper sticker carries a normal
+        # map (its paper roughness) and foil switches to a glitter mask
+        # instead of g_bMetallicSticker0.
+        paper = ('\t"g_bPaperBackingSticker0"\t"1"\n'
+                 '\t"TextureColorSticker0"\t"stickers/x/navi_paper_color.png"\n'
+                 '\t"TextureNormalSticker0"\t"stickers/x/navi_paper_rough.png"\n')
+        self.assertEqual(V.parse_vmat_text(cs2_vmat(paper, ""), "navi.vmat").finish, "PAPER")
+        gold = paper.replace("navi_paper", "navi_gold")
+        self.assertEqual(V.parse_vmat_text(cs2_vmat(gold, ""), "navi_gold.vmat").finish, "GOLD")
+        foil = ('\t"g_bFoilUsingGlitterMaskSticker0"\t"1"\n'
+                '\t"TextureColorSticker0"\t"stickers/x/navi_foil_color.png"\n')
+        self.assertEqual(V.parse_vmat_text(cs2_vmat(foil, ""), "navi_foil.vmat").finish, "FOIL")
+
     def test_cs2_self_illum(self):
         text = cs2_vmat('\t"g_bSelfIllumSticker0"\t"1"\n',
                         '\t"TextureNormalSticker0"\t"stickers/aus2025/3dm_selfillum_mask.png"\n'
