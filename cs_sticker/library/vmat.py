@@ -161,6 +161,11 @@ def parse_vmat_text(text, path=""):
     if _flag(info, "g_bSelfIllumSticker0") and F.ROLE_NORMAL in info.textures:
         info.textures[F.ROLE_EMISSION] = info.textures.pop(F.ROLE_NORMAL)
     info.finish = _finish_from_params(info)
+    # Singapore 2026 foil: the glitter mask marks the metallic parts, the
+    # rest (usually the logo) is plain glossy print.
+    if (_flag(info, "g_bFoilUsingGlitterMaskSticker0") and F.ROLE_GLITTER in info.textures
+            and F.ROLE_METALNESS not in info.textures):
+        info.textures[F.ROLE_METALNESS] = info.textures.pop(F.ROLE_GLITTER)
     # Every CS2 sticker references the flake normal, only glitter shows it.
     if info.finish != "GLITTER":
         info.textures.pop(F.ROLE_FLAKES, None)

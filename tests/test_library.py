@@ -185,6 +185,11 @@ class TestVmat(unittest.TestCase):
         foil = ('\t"g_bFoilUsingGlitterMaskSticker0"\t"1"\n'
                 '\t"TextureColorSticker0"\t"stickers/x/navi_foil_color.png"\n')
         self.assertEqual(V.parse_vmat_text(cs2_vmat(foil, ""), "navi_foil.vmat").finish, "FOIL")
+        # Its glitter mask becomes the metal mask.
+        mask = '\t"TextureGlitterMaskSticker0"\t"stickers/x/navi_foil_mask_1_glittermask.png"\n'
+        info = V.parse_vmat_text(cs2_vmat(foil + mask, ""), "navi_foil.vmat")
+        self.assertEqual(info.textures.get(F.ROLE_METALNESS), "stickers/x/navi_foil_mask_1_glittermask.png")
+        self.assertNotIn(F.ROLE_GLITTER, info.textures)
 
     def test_cs2_self_illum(self):
         text = cs2_vmat('\t"g_bSelfIllumSticker0"\t"1"\n',
