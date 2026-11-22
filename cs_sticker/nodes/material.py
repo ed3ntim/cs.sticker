@@ -22,9 +22,10 @@ STEEP_FROM, STEEP_TO = 0.08, 0.2
 # missed the target (the sticker would float), 0 on the surface.
 UNPROJECTED_ATTRIBUTE = "cs_unprojected"
 
-# UV repeats of the CS2 flake normal across a sticker (estimate, not taken
-# from the shader).
-FLAKE_TILING = 8.0
+# UV repeats of the CS2 flake normal across a sticker. csgo_weapon samples it
+# at sticker UV x g_flGlitterScaleSticker0 (1 for all stickers) x 1.75
+# (2.5 in a view mode not identified).
+FLAKE_TILING = 1.75
 
 MISSING_IMAGE_NAME = "CS2 Missing Texture"
 MAT_PREFIX = "CS2 "

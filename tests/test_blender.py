@@ -87,6 +87,20 @@ class TestNodeGroups(unittest.TestCase):
             self.assertTrue(bsdf[0].inputs["Alpha"].is_linked, f"{key}: alpha not wired")
             self.assertTrue(bsdf[0].inputs["Normal"].is_linked, f"{key}: normal not wired")
 
+    def test_glitter_mask_is_inverted(self):
+        # csgo_weapon: glitter = 1 - glitter mask (flakes where the mask is dark).
+        tree = groups.ensure_group("GLITTER")
+        sock = next(s for s in tree.interface.items_tree
+                    if s.item_type == "SOCKET" and s.name == "Glitter Mask")
+        self.assertEqual(sock.default_value, 0.0)
+        inp = next(n for n in tree.nodes if n.bl_idname == "NodeGroupInput")
+        users = [l.to_node for l in tree.links if l.from_node == inp and l.from_socket.name == "Glitter Mask"]
+        self.assertEqual(len(users), 1)
+        inv = users[0]
+        self.assertEqual((inv.bl_idname, inv.operation), ("ShaderNodeMath", "SUBTRACT"))
+        self.assertEqual(inv.inputs[0].default_value, 1.0)
+        self.assertEqual(material.FLAKE_TILING, 1.75)
+
     def test_groups_are_reused(self):
         a = groups.ensure_group("HOLO")
         b = groups.ensure_group("HOLO")

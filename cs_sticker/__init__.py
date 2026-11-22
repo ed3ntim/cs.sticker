@@ -9,12 +9,18 @@ legacy add-on (bl_info). Sub-packages:
     nodes/    node group builders and material assembly per finish type
     ops/      operators: spawning, interactive placement, library actions
     ui/       sidebar panels and the sticker list
+
+Host mode (cs.blend): a host add-on registers the package as a sub-module
+with ``register(host)``. It then registers SETTINGS (after register), keeps
+one instance per module and provides ``host.settings(MODULE_ID)`` and
+``host.user_path(MODULE_ID, sub, create)``; it draws the settings with
+``draw_prefs(layout, settings)``. Standalone (host None) nothing changes.
 """
 
 bl_info = {
     "name": "cs.sticker",
     "author": "ed3n",
-    "version": (2, 0, 2),
+    "version": (2, 1, 0),
     "blender": (4, 5, 0),
     "location": "3D Viewport > Sidebar > cs.sticker",
     "description": "Spawn CS2 stickers onto mesh surfaces with finish-accurate "
@@ -35,10 +41,16 @@ import bpy  # noqa: E402
 from . import utils, preferences, properties, library, nodes, ops, ui  # noqa: E402
 
 # Registration order matters: property groups before anything that points to them.
-_modules = (preferences, properties, library, ops, ui)
+_modules = (properties, library, ops, ui)
+
+MODULE_ID = utils.MODULE_ID
+SETTINGS = preferences.CSSTICKER_PG_settings
+draw_prefs = preferences.draw_prefs
 
 
-def register():
+def register(host=None):
+    utils.set_host(host)
+    preferences.register(host)
     for mod in _modules:
         mod.register()
 
@@ -46,3 +58,5 @@ def register():
 def unregister():
     for mod in reversed(_modules):
         mod.unregister()
+    preferences.unregister()
+    utils.set_host(None)

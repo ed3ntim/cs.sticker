@@ -1,25 +1,33 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 ed3n
-"""Add-on preferences: user sticker library path, uninstall."""
+"""Settings (user sticker library) and the add-on preferences.
+
+The settings live in a PropertyGroup (CSSTICKER_PG_settings). Standalone,
+the AddonPreferences point to it and add the uninstall button. Under a host
+add-on (cs.blend, register(host)) the host keeps the settings and draws
+them through draw_prefs(); no AddonPreferences, no uninstall button.
+
+Older versions kept the values directly on the AddonPreferences. Those
+stay declared there (hidden) and are moved into the settings once."""
 
 import bpy
-from bpy.props import BoolProperty, StringProperty
+from bpy.props import BoolProperty, PointerProperty, StringProperty
 
-from .utils import ADDON_ID
+from . import utils
 
 
 def install_location(context):
     """Where the add-on is installed: ("EXTENSION", repo_index, pkg_id),
     ("SYSTEM", repo_index, pkg_id) for a read-only system repo, or
     ("LEGACY", None, module) for an add-on outside the extension system."""
-    parts = ADDON_ID.split(".")
+    parts = utils.ADDON_ID.split(".")
     if len(parts) == 3 and parts[0] == "bl_ext":
         for i, repo in enumerate(context.preferences.extensions.repos):
             if repo.module == parts[1]:
                 kind = "SYSTEM" if getattr(repo, "source", "") == "SYSTEM" else "EXTENSION"
                 return kind, i, parts[2]
         return None
-    return "LEGACY", None, ADDON_ID
+    return "LEGACY", None, utils.ADDON_ID
 
 
 def _uninstall(location):
@@ -65,9 +73,7 @@ def _on_path_change(self, context):
     registry.refresh(context)
 
 
-class CSSTICKER_AP_preferences(bpy.types.AddonPreferences):
-    bl_idname = ADDON_ID
-
+class CSSTICKER_PG_settings(bpy.types.PropertyGroup):
     user_path: StringProperty(
         name="User Sticker Folder",
         description="Folder with additional stickers: Source2Viewer exports (PNG + optional .vmat), "
@@ -81,19 +87,36 @@ class CSSTICKER_AP_preferences(bpy.types.AddonPreferences):
         description="Also list stickers whose required textures are missing (shown with a warning icon)",
     )
 
+
+SETTINGS_KEYS = ("user_path", "include_incomplete")
+
+
+def draw_prefs(layout, settings):
+    """Settings UI, for the AddonPreferences and for a host add-on."""
+    layout.prop(settings, "user_path")
+    row = layout.row(align=True)
+    row.operator("cs_sticker.refresh_library", icon="FILE_REFRESH")
+    row.operator("cs_sticker.open_user_folder", icon="FILEBROWSER")
+    layout.prop(settings, "include_incomplete")
+    col = layout.column(align=True)
+    col.label(text="Folder layout examples:", icon="INFO")
+    col.label(text="  <folder>/<Capsule>/name.vmat + exported PNGs")
+    col.label(text="  <folder>/<Capsule>/name_color.png, name_normal.png, ...")
+    col.label(text="  <folder>/<Capsule>/<Sticker>/sticker.json")
+
+
+class CSSTICKER_AP_preferences(bpy.types.AddonPreferences):
+    bl_idname = utils.ADDON_ID
+
+    settings: PointerProperty(type=CSSTICKER_PG_settings)
+    migrated: BoolProperty(options={"HIDDEN"})
+    # Values of older versions, read once by migrate().
+    user_path: StringProperty(options={"HIDDEN"})
+    include_incomplete: BoolProperty(default=True, options={"HIDDEN"})
+
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, "user_path")
-        row = layout.row(align=True)
-        row.operator("cs_sticker.refresh_library", icon="FILE_REFRESH")
-        row.operator("cs_sticker.open_user_folder", icon="FILEBROWSER")
-        layout.prop(self, "include_incomplete")
-        col = layout.column(align=True)
-        col.label(text="Folder layout examples:", icon="INFO")
-        col.label(text="  <folder>/<Capsule>/name.vmat + exported PNGs")
-        col.label(text="  <folder>/<Capsule>/name_color.png, name_normal.png, ...")
-        col.label(text="  <folder>/<Capsule>/<Sticker>/sticker.json")
-
+        draw_prefs(layout, self.settings)
         layout.separator()
         row = layout.row()
         row.alert = True
@@ -103,11 +126,39 @@ class CSSTICKER_AP_preferences(bpy.types.AddonPreferences):
             layout.label(text="Installed in a system repository, remove it there.", icon="INFO")
 
 
-def register():
+def migrate(prefs):
+    """Move the values of older versions into the settings (once). Item
+    assignment skips the update callbacks: nothing is loaded here."""
+    if prefs is None or prefs.migrated:
+        return False
+    for key in SETTINGS_KEYS:
+        prefs.settings[key] = getattr(prefs, key)
+    prefs.user_path = ""
+    prefs.include_incomplete = True
+    prefs.migrated = True
+    return True
+
+
+_standalone = False
+
+
+def register(host=None):
+    global _standalone
+    bpy.utils.register_class(CSSTICKER_PG_settings)
+    _standalone = host is None
+    if not _standalone:
+        return
     bpy.utils.register_class(CSSTICKER_OT_uninstall)
     bpy.utils.register_class(CSSTICKER_AP_preferences)
+    addon = bpy.context.preferences.addons.get(utils.ADDON_ID)
+    if addon is not None:
+        migrate(addon.preferences)
 
 
 def unregister():
-    bpy.utils.unregister_class(CSSTICKER_AP_preferences)
-    bpy.utils.unregister_class(CSSTICKER_OT_uninstall)
+    global _standalone
+    if _standalone:
+        bpy.utils.unregister_class(CSSTICKER_AP_preferences)
+        bpy.utils.unregister_class(CSSTICKER_OT_uninstall)
+        _standalone = False
+    bpy.utils.unregister_class(CSSTICKER_PG_settings)

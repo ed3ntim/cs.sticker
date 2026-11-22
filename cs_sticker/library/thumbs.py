@@ -27,13 +27,7 @@ THUMB_VERSION = 2  # bump when the look changes, invalidates the cache
 
 
 def cache_dir():
-    path = ""
-    getter = getattr(bpy.utils, "extension_path_user", None)
-    if getter is not None and utils.ADDON_ID.startswith("bl_ext."):
-        try:
-            path = getter(utils.ADDON_ID, path="thumbs", create=True)
-        except (ValueError, RuntimeError, OSError):
-            path = ""
+    path = utils.user_path("thumbs")
     if not path:
         path = os.path.join(tempfile.gettempdir(), "cs_sticker_thumbs")
     os.makedirs(path, exist_ok=True)
@@ -142,7 +136,8 @@ def compose(sticker, size=SIZE):
 
     elif finish == "GLITTER":
         glit = _read(tex.get(F.ROLE_GLITTER), size, data=True)
-        g = glit[..., 0] if glit is not None else np.ones_like(alpha)
+        # CS2: glitter where the mask is dark (shader uses 1 - mask).
+        g = 1.0 - glit[..., 0] if glit is not None else np.ones_like(alpha)
         rng = np.random.default_rng(zlib.crc32(sticker.id.encode("utf-8")))
         spark = (rng.random(alpha.shape) > 0.97).astype(np.float32) * g
         rgb = np.clip(rgb + spark[..., None] * 0.7, 0.0, 1.0)

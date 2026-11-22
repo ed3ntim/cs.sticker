@@ -10,6 +10,8 @@ import bpy
 # Package name as Blender sees it ("cs_sticker" for legacy installs,
 # "bl_ext.<repo>.cs_sticker" for extensions). Used as AddonPreferences id.
 ADDON_ID = __package__
+# Name of the module towards a host add-on (cs.blend), whatever the package path.
+MODULE_ID = "cs_sticker"
 
 ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
 CORE_LIBRARY_DIR = os.path.join(ADDON_DIR, "stickers", "core")
@@ -50,18 +52,54 @@ def mask_floor(red):
     return floor if 0.0 < floor <= MASK_FLOOR_MAX else 0.0
 
 
-def get_prefs():
-    """Return the add-on preferences or None (e.g. when run from tests)."""
+# Host add-on (cs.blend) when registered as its sub-module, else None.
+# The host provides settings(module_id) and user_path(module_id, sub, create).
+_host = None
+
+
+def set_host(host):
+    global _host
+    _host = host
+
+
+def get_host():
+    return _host
+
+
+def prefs():
+    """The settings (preferences.CSSTICKER_PG_settings) or None, e.g. while
+    not registered. Standalone they hang off the add-on preferences, in host
+    mode the host keeps them."""
+    if _host is not None:
+        return _host.settings(MODULE_ID)
     addon = bpy.context.preferences.addons.get(ADDON_ID)
-    return addon.preferences if addon else None
+    return getattr(addon.preferences, "settings", None) if addon else None
+
+
+# Name before 2.1, kept for scripts written against it.
+get_prefs = prefs
+
+
+def user_path(sub="", create=True):
+    """Folder for the add-on's own user data (caches), or '' if there is
+    none (legacy install without host)."""
+    try:
+        if _host is not None:
+            return _host.user_path(MODULE_ID, sub, create=create) or ""
+        getter = getattr(bpy.utils, "extension_path_user", None)
+        if getter is not None and ADDON_ID.startswith("bl_ext."):
+            return getter(ADDON_ID, path=sub, create=create)
+    except (ValueError, RuntimeError, OSError):
+        pass
+    return ""
 
 
 def user_library_dir():
-    """Absolute user sticker path from the preferences, or '' if unset/invalid."""
-    prefs = get_prefs()
-    if prefs is None or not prefs.user_path:
+    """Absolute user sticker path from the settings, or '' if unset/invalid."""
+    settings = prefs()
+    if settings is None or not settings.user_path:
         return ""
-    path = bpy.path.abspath(prefs.user_path)
+    path = bpy.path.abspath(settings.user_path)
     return path if os.path.isdir(path) else ""
 
 

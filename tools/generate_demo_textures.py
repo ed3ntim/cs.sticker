@@ -191,7 +191,8 @@ def gen_glitter():
 
     def mask(u, v, x, y):
         d = sd_polygon(x, y, pts)
-        return (cover(d + 0.05),)  # glitter inside the heart, not on the border
+        # CS2 convention: glitter where dark, so inside the heart, not on the border
+        return (1.0 - cover(d + 0.05),)
     return {
         "base": save("demo_glitter_heart_color.png", SIZE, SIZE, render(SIZE, SIZE, shade)),
         "glitter": save("demo_glitter_heart_glitter.png", SIZE, SIZE, render(SIZE, SIZE, mask), 1),

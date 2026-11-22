@@ -11,7 +11,8 @@ single group serves every sticker of that finish. The material builder
 Shading model (approximating csgo_sticker.vfx):
 
 * Paper        matte print, light clear coat option
-* Glitter      micro-flakes perturb the normal, metallic in mask. Flakes come
+* Glitter      micro-flakes perturb the normal, metallic where the CS2 glitter
+               mask is dark (the game shader uses 1 - mask). Flakes come
                from the CS2 flake normal texture when wired, else voronoi
 * Holo         mask R = strength, G/B = spectrum offset, A = multiplier;
                spectrum lookup shifts with view angle ("tilt")
@@ -40,7 +41,7 @@ from .builder import GroupBuilder, principled, set_bsdf
 
 # Bump when group contents change; outdated groups are replaced (old ones
 # are renamed, so existing materials keep working until re-spawned).
-GROUP_VERSION = 6
+GROUP_VERSION = 7
 VERSION_KEY = "cs_sticker_version"
 
 PREFIX = "CS2 "
@@ -330,7 +331,8 @@ def _build_paper(tree):
 def _build_glitter(tree):
     b = GroupBuilder(tree)
     base, alpha, ncol, nstr = _common_inputs(b, 0.5)
-    mask = b.input("Glitter Mask", default=1.0, lo=0.0, hi=1.0, factor=True)
+    mask_in = b.input("Glitter Mask", default=0.0, lo=0.0, hi=1.0, factor=True,
+                      description="CS2 glitter mask: flakes where dark (0), none where white (1)")
     gscale = b.input("Glitter Scale", default=450.0, lo=1.0, hi=10000.0)
     gstr = b.input("Glitter Strength", default=0.6, lo=0.0, hi=2.0)
     gmetal = b.input("Glitter Metallic", default=0.9, lo=0.0, hi=1.0, factor=True)
@@ -341,6 +343,8 @@ def _build_glitter(tree):
     use_tex = b.input("Use Flake Texture", default=0.0, lo=0.0, hi=1.0, factor=True,
                       description="1 = flakes from Flake Normal, 0 = procedural voronoi flakes")
     wear = _wear_inputs(b)
+    # csgo_weapon: glitter = 1 - TextureGlitterMaskSticker0 (alpha of g_tSfxMask).
+    mask = b.math("SUBTRACT", 1.0, mask_in, x=50, y=-500, clamp=True)
 
     coord = b.node("ShaderNodeTexCoord", x=-900, y=-200)
     vor = b.node("ShaderNodeTexVoronoi", x=-700, y=-200, feature="F1")
