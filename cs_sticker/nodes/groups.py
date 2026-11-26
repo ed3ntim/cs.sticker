@@ -14,8 +14,8 @@ Shading model (approximating csgo_sticker.vfx):
 * Glitter      micro-flakes perturb the normal, metallic where the CS2 glitter
                mask is dark (the game shader uses 1 - mask). Flakes come
                from the CS2 flake normal texture when wired, else voronoi
-* Holo         mask R = strength, G/B = spectrum offset, A = multiplier;
-               spectrum lookup shifts with view angle ("tilt")
+* Holo         mask R = strength, G + N.V = spectrum u, 1 - B = v, A = multiplier
+               (csgo_weapon's lookup, see _build_holo_coords)
 * Foil         metallic where mask, embossed via normal map
 * Gold         foil with gold tint multiplied into the (optionally
                desaturated) base, like CS2's legacy tint multiply
@@ -41,7 +41,7 @@ from .builder import GroupBuilder, principled, set_bsdf
 
 # Bump when group contents change; outdated groups are replaced (old ones
 # are renamed, so existing materials keep working until re-spawned).
-GROUP_VERSION = 7
+GROUP_VERSION = 8
 VERSION_KEY = "cs_sticker_version"
 
 PREFIX = "CS2 "
@@ -142,32 +142,34 @@ def _build_wear(tree):
 
 
 def _build_holo_coords(tree):
-    """Holo mask + view angle -> spectrum lookup vector."""
+    """Holo mask + view angle -> spectrum lookup vector.
+
+    csgo_weapon samples the spectrum at (G + N.V + V.C, B): N the surface
+    normal, V the direction to the camera, C a per-view vector (most likely
+    the camera direction, then V.C is about -1 and shifts the repeating
+    spectrum by one period, so it is left out). Texture space has v from
+    the top, so Blender's v is 1 - B."""
     b = GroupBuilder(tree)
     mask = b.input("Holo Mask", "COLOR", default=(1.0, 0.0, 0.0, 1.0))
     tilt_strength = b.input("Tilt Strength", default=1.0, lo=-10.0, hi=10.0,
-                            description="How fast the spectrum shifts with viewing angle")
+                            description="How fast the spectrum shifts with viewing angle (CS2: 1)")
     scale = b.input("Spectrum Scale", default=1.0, lo=-100.0, hi=100.0)
     offset = b.input("Spectrum Offset", default=0.0)
-    decal_tangent = b.input("Decal Tangent", "VECTOR", default=(0.0, 0.0, 0.0), hide_value=True)
     out = b.output("Vector", "VECTOR")
 
     b.column(-900)
     geo = b.node("ShaderNodeNewGeometry", y=200)
-    tangent = _tangent(b, decal_tangent, x=-900, y=-50)
     _, g, bl = b.separate_color(mask, x=-900, y=-300)
 
     b.column(-650)
-    facing = b.math("SUBTRACT", 1.0, b.vmath("DOT_PRODUCT", (geo, "Normal"), (geo, "Incoming"), y=250),
-                    x=-450, y=250)
-    side = b.vmath("DOT_PRODUCT", (geo, "Incoming"), tangent, y=0)
+    facing = b.vmath("DOT_PRODUCT", (geo, "Normal"), (geo, "Incoming"), y=250)
+    v = b.math("SUBTRACT", 1.0, bl, y=-300)
     b.column(-250)
-    tilt = b.math("ADD", b.math("MULTIPLY", side, 0.5, y=0), b.math("MULTIPLY", facing, 0.5, y=200), x=-100)
-    tilt = b.math("MULTIPLY", tilt, tilt_strength, x=50)
+    tilt = b.math("MULTIPLY", facing, tilt_strength, x=50)
     u = b.math("ADD", g, tilt, x=200)
     u = b.math("MULTIPLY_ADD", u, scale, x=350)
     b.links.new(offset, u.node.inputs[2])
-    b.links.new(b.combine(u, bl, 0.0, x=550), out)
+    b.links.new(b.combine(u, v, 0.0, x=550), out)
 
 
 def _build_holo_spectrum(tree):

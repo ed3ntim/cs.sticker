@@ -101,6 +101,23 @@ class TestNodeGroups(unittest.TestCase):
         self.assertEqual(inv.inputs[0].default_value, 1.0)
         self.assertEqual(material.FLAKE_TILING, 1.75)
 
+    def test_holo_coords_like_the_shader(self):
+        # csgo_weapon: spectrum at (G + N.V + V.camera, B) in texture space
+        # (v from the top), so Blender's v is 1 - B; no tangent term.
+        tree = groups.ensure_group("HOLO_COORDS")
+        names = {s.name for s in tree.interface.items_tree if s.item_type == "SOCKET"}
+        self.assertNotIn("Decal Tangent", names)
+        self.assertFalse(any(n.bl_idname == "ShaderNodeTangent" for n in tree.nodes))
+        sep = next(n for n in tree.nodes if n.bl_idname == "ShaderNodeSeparateColor")
+        blue = [l.to_node for l in tree.links if l.from_node == sep and l.from_socket.name == "Blue"]
+        self.assertEqual(len(blue), 1)
+        self.assertEqual((blue[0].bl_idname, blue[0].operation), ("ShaderNodeMath", "SUBTRACT"))
+        self.assertEqual(blue[0].inputs[0].default_value, 1.0)
+        dots = [n for n in tree.nodes if n.bl_idname == "ShaderNodeVectorMath" and n.operation == "DOT_PRODUCT"]
+        self.assertEqual(len(dots), 1)
+        geo_out = {l.from_socket.name for l in tree.links if l.to_node == dots[0]}
+        self.assertEqual(geo_out, {"Normal", "Incoming"})
+
     def test_groups_are_reused(self):
         a = groups.ensure_group("HOLO")
         b = groups.ensure_group("HOLO")

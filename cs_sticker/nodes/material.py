@@ -260,7 +260,7 @@ def add_sticker_nodes(tree, sticker, warnings, mask=None, vector=None, tangent=N
         _wire_flakes(nodes, links, tex_node, wire, grp, vector, (ox, oy))
 
     if finish == "HOLO" or (finish == "LENTICULAR" and not lenticular_strip):
-        _wire_holo(nodes, links, tex_node, wire, tangent, (ox, oy))
+        _wire_holo(nodes, links, tex_node, wire, (ox, oy))
 
     _apply_params(sticker, grp)
     return grp
@@ -290,14 +290,12 @@ def _wire_flakes(nodes, links, tex_node, wire, grp, vector=None, origin=(0, 0)):
     _set_input(grp, "Use Flake Texture", 1.0)
 
 
-def _wire_holo(nodes, links, tex_node, wire, tangent=None, origin=(0, 0)):
+def _wire_holo(nodes, links, tex_node, wire, origin=(0, 0)):
     """holomask -> Holo Coords -> spectrum (texture or procedural) -> group."""
     ox, oy = origin
     coords = nodes.new("ShaderNodeGroup")
     coords.node_tree = groups.ensure_group("HOLO_COORDS")
     coords.location = (ox - 750, oy - 500)
-    if tangent is not None:
-        links.new(tangent, coords.inputs["Decal Tangent"])
     mask = tex_node(F.ROLE_HOLOMASK, -300)
     if mask:
         links.new(mask.outputs["Color"], coords.inputs["Holo Mask"])

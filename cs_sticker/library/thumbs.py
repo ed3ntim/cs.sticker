@@ -23,7 +23,7 @@ from .. import utils
 from . import finishes as F
 
 SIZE = 256
-THUMB_VERSION = 2  # bump when the look changes, invalidates the cache
+THUMB_VERSION = 3  # bump when the look changes, invalidates the cache
 
 
 def cache_dir():
@@ -115,7 +115,7 @@ def compose(sticker, size=SIZE):
         if holo is not None:
             strength = holo[..., 0:1] * 0.75
             u = np.mod(holo[..., 1] + 0.35 * (x + y), 1.0)
-            v = holo[..., 2]
+            v = 1.0 - holo[..., 2]  # CS2: v = B from the top, Blender rows start at the bottom
             spec = _read(tex.get(F.ROLE_HOLOSPECTRUM), (256, 64))
             if spec is not None:
                 ui = np.clip((u * 255).astype(int), 0, 255)

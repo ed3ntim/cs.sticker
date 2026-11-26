@@ -20,7 +20,7 @@ one instance per module and provides ``host.settings(MODULE_ID)`` and
 bl_info = {
     "name": "cs.sticker",
     "author": "ed3n",
-    "version": (2, 1, 0),
+    "version": (2, 1, 1),
     "blender": (4, 5, 0),
     "location": "3D Viewport > Sidebar > cs.sticker",
     "description": "Spawn CS2 stickers onto mesh surfaces with finish-accurate "
